@@ -493,25 +493,33 @@ function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCard
         {isStreaming && (
           <div className="ml-auto flex items-center gap-1.5">
             <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-[10px] text-blue-500/70">Thinking...</span>
+            <span className="text-[10px] text-blue-500/70">Planning...</span>
           </div>
+        )}
+        {!isStreaming && showImplement && (
+          <span className="ml-auto text-[10px] text-muted-foreground/60">Review the plan, then click Build</span>
         )}
       </div>
 
-      <div className="px-4 py-3 text-sm leading-relaxed text-foreground/80">
+      <div className="px-4 py-3 text-sm leading-relaxed text-foreground/80 max-h-[400px] overflow-y-auto">
         <div className="whitespace-pre-wrap">{content}</div>
         {isStreaming && <StreamingCursor />}
       </div>
 
       {showImplement && (
-        <div className="px-4 py-3 border-t border-blue-500/10 bg-blue-500/[0.02]">
-          <button
-            onClick={onImplement}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-violet-500/15 hover:shadow-lg hover:shadow-violet-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Play className="h-3.5 w-3.5" />
-            Implement this plan
-          </button>
+        <div className="px-4 py-3 border-t border-blue-500/10 bg-gradient-to-r from-blue-500/[0.03] to-violet-500/[0.03]">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onImplement}
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Rocket className="h-4 w-4" />
+              Build this
+            </button>
+            <span className="text-[11px] text-muted-foreground/60">
+              The agile team will start a sprint to build your app
+            </span>
+          </div>
         </div>
       )}
     </div>

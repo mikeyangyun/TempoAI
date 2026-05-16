@@ -46,7 +46,12 @@ export function ChatPanel({
 
   const handleImplementPlan = (planContent: string) => {
     onModeChange('build');
-    onSend(planContent, 'build');
+    const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+    const originalRequest = lastUserMsg?.content || '';
+    onSend(
+      `Build the application based on this plan:\n\n---\nOriginal request: ${originalRequest}\n---\n\n${planContent}`,
+      'build'
+    );
   };
 
   return (
