@@ -1,18 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/types';
 import { StreamPhase } from '@/hooks/useChat';
 import {
   User,
-  Bot,
-  FileCode2,
   Check,
-  Circle,
-  Search,
-  GitBranch,
-  Code,
-  Loader2,
+  ChevronUp,
+  ChevronDown,
+  Copy,
+  MoreHorizontal,
+  Sparkles,
 } from 'lucide-react';
 
 interface MessageBubbleProps {
@@ -34,139 +33,240 @@ export function MessageBubble({
 
   if (isUser) {
     return (
-      <div className="flex gap-3 px-4 py-3 flex-row-reverse">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-          <User className="h-4 w-4" />
-        </div>
-        <div className="flex max-w-[80%] flex-col items-end">
-          <div className="rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed">
-            <span className="whitespace-pre-wrap">{message.content}</span>
-          </div>
+      <div className="flex justify-end px-4 py-3">
+        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-foreground/[0.06] dark:bg-foreground/10 px-4 py-2.5 text-sm leading-relaxed text-foreground">
+          <span className="whitespace-pre-wrap">{message.content}</span>
         </div>
       </div>
     );
   }
 
-  // Assistant message — structured process layout
   return (
-    <div className="flex gap-3 px-4 py-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <Bot className="h-4 w-4" />
+    <AssistantMessage
+      message={message}
+      isStreaming={isStreaming}
+      streamPhase={streamPhase}
+      agentName={agentName}
+      streamingLineCount={streamingLineCount}
+    />
+  );
+}
+
+interface AssistantMessageProps {
+  message: ChatMessage;
+  isStreaming?: boolean;
+  streamPhase: StreamPhase;
+  agentName: string;
+  streamingLineCount: number;
+}
+
+function AssistantMessage({
+  message,
+  isStreaming,
+  streamPhase,
+  agentName,
+  streamingLineCount,
+}: AssistantMessageProps) {
+  const [stepsExpanded, setStepsExpanded] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const displayAgentName = agentName || (message.rawContent ? 'Tempo' : 'Tempo');
+  const agentRole = getAgentRole(agentName);
+
+  const stepCount = getStepCount(streamPhase, message);
+  const isComplete = !isStreaming && !!message.rawContent;
+  const showSteps = isStreaming || message.rawContent;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="px-4 py-4">
+      {/* Agent header */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-blue-500/20">
+          <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+        </div>
+        <span className="text-sm font-semibold text-foreground">{displayAgentName}</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="text-sm text-muted-foreground">{agentRole}</span>
       </div>
 
-      <div className="flex-1 min-w-0 space-y-3">
-        {/* Process steps — shown during streaming or after completion */}
-        {(isStreaming || message.rawContent) && (
-          <ProcessSteps
-            phase={isStreaming ? streamPhase : 'complete'}
-            agentName={agentName || (message.rawContent ? 'CodeGenerator' : '')}
-            lineCount={streamingLineCount}
-          />
-        )}
+      {/* Collapsible process steps */}
+      {showSteps && (
+        <div className="ml-10 mb-3">
+          <button
+            onClick={() => setStepsExpanded(!stepsExpanded)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+          >
+            {isComplete ? (
+              <Check className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <div className="h-4 w-4 flex items-center justify-center">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
+              </div>
+            )}
+            <span className="font-medium">
+              {isComplete
+                ? `Processed ${stepCount} steps`
+                : `Processing${streamPhase === 'writing' ? ` (${streamingLineCount} lines)` : '...'}`}
+            </span>
+            {stepsExpanded ? (
+              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground/60" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" />
+            )}
+          </button>
 
-        {/* AI's natural language text */}
-        {message.content && (
-          <div className="text-sm leading-relaxed text-foreground">
-            <span className="whitespace-pre-wrap">{message.content}</span>
-            {isStreaming && <StreamingCursor />}
-          </div>
-        )}
+          {stepsExpanded && (
+            <div className="mt-2 space-y-1.5">
+              <ThinkingSteps
+                streamPhase={streamPhase}
+                isStreaming={!!isStreaming}
+                agentName={agentName}
+                lineCount={streamingLineCount}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
-        {/* Waiting state — no content yet */}
-        {!message.content && isStreaming && streamPhase === 'analyzing' && (
-          <div className="text-sm text-muted-foreground">
-            <StreamingDots />
-          </div>
-        )}
+      {/* AI's natural language response */}
+      {message.content && (
+        <div className="ml-10 text-sm leading-relaxed text-foreground/80">
+          <span className="whitespace-pre-wrap">{message.content}</span>
+          {isStreaming && <StreamingCursor />}
+        </div>
+      )}
 
-        {/* Generated app card — shown after completion */}
-        {!isStreaming && message.rawContent && <GeneratedAppCard />}
-      </div>
+      {/* Waiting state */}
+      {!message.content && isStreaming && streamPhase === 'analyzing' && (
+        <div className="ml-10 text-sm text-muted-foreground">
+          <StreamingDots />
+        </div>
+      )}
+
+      {/* Generated app card */}
+      {!isStreaming && message.rawContent && (
+        <div className="ml-10 mt-3">
+          <GeneratedAppCard />
+        </div>
+      )}
+
+      {/* Action bar */}
+      {!isStreaming && message.content && (
+        <div className="ml-10 mt-2 flex items-center gap-1">
+          <button
+            onClick={handleCopy}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+          <button className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors">
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-interface ProcessStepsProps {
-  phase: StreamPhase;
+function getAgentRole(agentName: string): string {
+  const name = agentName.toLowerCase();
+  if (name.includes('modifier') || name.includes('modify')) return 'Code Modifier';
+  if (name.includes('generator') || name.includes('generate')) return 'Code Generator';
+  if (name.includes('orchestrator')) return 'Orchestrator';
+  return 'Code Generator';
+}
+
+function getStepCount(phase: StreamPhase, message: ChatMessage): number {
+  if (message.rawContent) return 3;
+  switch (phase) {
+    case 'complete': return 3;
+    case 'writing': return 2;
+    case 'routing': return 1;
+    case 'analyzing': return 0;
+    default: return 0;
+  }
+}
+
+interface ThinkingStepsProps {
+  streamPhase: StreamPhase;
+  isStreaming: boolean;
   agentName: string;
   lineCount: number;
 }
 
-function ProcessSteps({ phase, agentName, lineCount }: ProcessStepsProps) {
+function ThinkingSteps({ streamPhase, isStreaming, agentName, lineCount }: ThinkingStepsProps) {
+  const phase = isStreaming ? streamPhase : 'complete';
+
   const steps = [
     {
       id: 'analyze',
-      label: 'Analyzing request',
-      icon: Search,
+      text: 'Analyzing the user\'s request and determining the best approach.',
       done: phase !== 'idle' && phase !== 'analyzing',
       active: phase === 'analyzing',
     },
     {
       id: 'route',
-      label: agentName ? `Using ${agentName}` : 'Selecting agent',
-      icon: GitBranch,
+      text: `Routing to ${agentName || 'agent'} for code generation.`,
       done: phase === 'writing' || phase === 'complete',
       active: phase === 'routing',
     },
     {
       id: 'write',
-      label: phase === 'writing'
-        ? `Writing code${lineCount > 0 ? ` (${lineCount} lines)` : '...'}`
-        : phase === 'complete'
-          ? 'Code generated'
-          : 'Writing code',
-      icon: Code,
+      text: phase === 'writing'
+        ? `Writing code${lineCount > 0 ? ` — ${lineCount} lines generated` : '...'}`
+        : 'Code generation complete.',
       done: phase === 'complete',
       active: phase === 'writing',
     },
   ];
 
   return (
-    <div className="space-y-1">
+    <>
       {steps.map((step) => {
-        if (!step.done && !step.active && phase === 'idle') return null;
-        // Only show steps up to current phase
         if (!step.done && !step.active) return null;
-
         return (
-          <div key={step.id} className="flex items-center gap-2">
-            {step.done ? (
-              <Check className="h-3 w-3 text-green-500 shrink-0" />
-            ) : step.active ? (
-              <Loader2 className="h-3 w-3 text-muted-foreground animate-spin shrink-0" />
-            ) : (
-              <Circle className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-            )}
-            <span
-              className={cn(
-                'text-xs',
-                step.done
-                  ? 'text-muted-foreground'
-                  : step.active
-                    ? 'text-muted-foreground font-medium'
-                    : 'text-muted-foreground/40'
+          <div key={step.id} className="flex items-start gap-2.5">
+            <div className="mt-1.5 shrink-0">
+              {step.done ? (
+                <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+              ) : (
+                <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
               )}
-            >
-              {step.label}
+            </div>
+            <span className="text-[13px] leading-relaxed text-muted-foreground">
+              {step.text}
+              {step.id === 'route' && agentName && (
+                <code className="ml-1 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
+                  {agentName}
+                </code>
+              )}
             </span>
           </div>
         );
       })}
-    </div>
+    </>
   );
 }
 
 function GeneratedAppCard() {
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2 max-w-xs">
-      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
-        <FileCode2 className="h-3.5 w-3.5 text-primary" />
+    <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 max-w-sm">
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10">
+          <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">App Generated</p>
+          <p className="text-xs text-muted-foreground">View in the preview panel &rarr;</p>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium">App generated</p>
-        <p className="text-[10px] text-muted-foreground">View in preview panel</p>
-      </div>
-      <Check className="h-4 w-4 text-green-500" />
+      <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
     </div>
   );
 }
