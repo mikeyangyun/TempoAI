@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Orchestrator } from '@/lib/agents/orchestrator';
-import { ChatMessage, AgentContext, ChatMode } from '@/types';
+import { SprintOrchestrator } from '@/lib/agents/team/sprint-orchestrator';
+import { ChatMessage, AgentContext, ChatMode, SprintContext } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, currentHtml, mode } = body as {
+    const { messages, currentHtml, mode, sprintContext, baAnswer } = body as {
       messages: ChatMessage[];
       currentHtml?: string | null;
       mode?: ChatMode;
+      sprintContext?: SprintContext;
+      baAnswer?: string;
     };
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -25,15 +28,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const orchestrator = new Orchestrator();
-
     const context: AgentContext = {
       messages,
       currentHtml: currentHtml || null,
       mode: mode || 'build',
     };
 
-    const { stream, agentName } = await orchestrator.execute(context);
+    let stream: AsyncIterable<string>;
+    let agentName: string;
+
+    if (mode === 'plan') {
+      const orchestrator = new Orchestrator();
+      const result = await orchestrator.execute(context);
+      stream = result.stream;
+      agentName = result.agentName || 'PlannerAgent';
+    } else {
+      const sprint = new SprintOrchestrator();
+      stream = sprint.executeSprint(context, sprintContext, baAnswer);
+      agentName = 'SprintTeam';
+    }
 
     const readableStream = new ReadableStream({
       async start(controller) {
@@ -57,7 +70,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Transfer-Encoding': 'chunked',
-        'X-Agent-Name': agentName || 'CodeGenerator',
+        'X-Agent-Name': agentName,
       },
     });
   } catch (error) {

@@ -60,3 +60,16 @@ export type AgentResult = {
   stream: AsyncIterable<string>;
   agentName?: string;
 };
+
+export type TeamRole = 'ba' | 'tl' | 'uiux' | 'dev' | 'qa';
+
+export type SprintRoleOutput = {
+  role: TeamRole;
+  content: string;
+};
+
+export type SprintContext = {
+  roleOutputs: SprintRoleOutput[];
+  userAnswers?: string[];
+  sprintNumber: number;
+};

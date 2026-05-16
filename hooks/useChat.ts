@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChatMessage, ParseResult, Project, ProjectVersion, FileMap, ChatMode } from '@/types';
+import { ChatMessage, ParseResult, Project, ProjectVersion, FileMap, ChatMode, TeamRole, SprintContext } from '@/types';
 import { parseHtmlFence, parseMultiFileFence, isMultiFileFormat, mergeFilesToHtml } from '@/lib/parser';
 import { getStorage } from '@/lib/storage';
 import { useToast } from '@/components/Toast';
@@ -11,6 +11,20 @@ function generateId(): string {
 }
 
 export type StreamPhase = 'idle' | 'analyzing' | 'routing' | 'writing' | 'validating' | 'fixing' | 'complete';
+
+export type TeamPhaseInfo = {
+  role: TeamRole;
+  status: 'start' | 'done' | 'question' | 'pass' | 'fail' | 'fix';
+  name: string;
+  title: string;
+};
+
+export type TeamProgress = {
+  phases: TeamPhaseInfo[];
+  activeRole: TeamRole | null;
+  baQuestions: string[] | null;
+  sprintComplete: boolean;
+};
 
 /**
  * Splits streaming content into chat text and code text.
@@ -79,12 +93,33 @@ interface UseChatReturn {
   streamPhase: StreamPhase;
   agentName: string;
   fileMap: FileMap;
+  teamProgress: TeamProgress;
   sendMessage: (content: string, mode?: ChatMode) => void;
+  answerBA: (answer: string) => void;
   stopGeneration: () => void;
   loadProject: (id: string) => Promise<void>;
   newChat: () => void;
   restoreVersion: (index: number) => void;
 }
+
+function parseTeamMarker(text: string): TeamPhaseInfo | null {
+  const match = text.match(/\[TEAM:(\w+):(\w+):([^:]+):([^\]]+)\]/);
+  if (!match) return null;
+  return { role: match[1] as TeamRole, status: match[2] as TeamPhaseInfo['status'], name: match[3], title: match[4] };
+}
+
+function extractBAQuestions(text: string): string[] | null {
+  const match = text.match(/\[QUESTIONS\]([\s\S]*?)\[\/QUESTIONS\]/);
+  if (!match) return null;
+  return match[1].trim().split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+}
+
+const INITIAL_TEAM_PROGRESS: TeamProgress = {
+  phases: [],
+  activeRole: null,
+  baQuestions: null,
+  sprintComplete: false,
+};
 
 export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -99,8 +134,11 @@ export function useChat(): UseChatReturn {
   const [streamPhase, setStreamPhase] = useState<StreamPhase>('idle');
   const [agentName, setAgentName] = useState('');
   const [fileMap, setFileMap] = useState<FileMap>({});
+  const [teamProgress, setTeamProgress] = useState<TeamProgress>(INITIAL_TEAM_PROGRESS);
   const abortControllerRef = useRef<AbortController | null>(null);
   const projectIdRef = useRef<string | null>(null);
+  const sprintContextRef = useRef<SprintContext | undefined>(undefined);
+  const originalRequestRef = useRef<string>('');
   const { showToast } = useToast();
 
   const saveProject = useCallback(
@@ -135,7 +173,7 @@ export function useChat(): UseChatReturn {
   );
 
   const sendMessage = useCallback(
-    async (content: string, mode?: ChatMode) => {
+    async (content: string, mode?: ChatMode, baAnswer?: string) => {
       if (!content.trim() || isGenerating) return;
 
       let projectId = projectIdRef.current;
@@ -143,6 +181,10 @@ export function useChat(): UseChatReturn {
         projectId = generateId();
         projectIdRef.current = projectId;
         setActiveProjectId(projectId);
+      }
+
+      if (!baAnswer) {
+        originalRequestRef.current = content.trim();
       }
 
       const userMessage: ChatMessage = {
@@ -159,6 +201,9 @@ export function useChat(): UseChatReturn {
       setLastParseResult(null);
       setStreamPhase('analyzing');
       setAgentName('');
+      if (!baAnswer) {
+        setTeamProgress(INITIAL_TEAM_PROGRESS);
+      }
 
       const assistantMessage: ChatMessage = {
         id: generateId(),
@@ -181,6 +226,8 @@ export function useChat(): UseChatReturn {
             messages: updatedMessages,
             currentHtml,
             mode: mode || 'build',
+            sprintContext: sprintContextRef.current,
+            baAnswer,
           }),
           signal: controller.signal,
         });
@@ -212,7 +259,45 @@ export function useChat(): UseChatReturn {
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
 
-          // Detect phase markers from the orchestrator
+          // Detect TEAM phase markers (agile team)
+          const teamMarkerRegex = /\[TEAM:(\w+):(\w+):([^:]+):([^\]]+)\]/g;
+          let teamMatch;
+          const currentPhases: TeamPhaseInfo[] = [];
+          let latestActiveRole: TeamRole | null = null;
+          let detectedQuestions: string[] | null = null;
+          let sprintDone = false;
+
+          while ((teamMatch = teamMarkerRegex.exec(fullContent)) !== null) {
+            const info: TeamPhaseInfo = {
+              role: teamMatch[1] as TeamRole,
+              status: teamMatch[2] as TeamPhaseInfo['status'],
+              name: teamMatch[3],
+              title: teamMatch[4],
+            };
+            currentPhases.push(info);
+            if (info.status === 'start' || info.status === 'fix') {
+              latestActiveRole = info.role;
+            }
+            if (info.status === 'done' || info.status === 'pass' || info.status === 'fail') {
+              if (latestActiveRole === info.role) latestActiveRole = null;
+            }
+            if (info.status === 'question') {
+              detectedQuestions = extractBAQuestions(fullContent);
+            }
+          }
+
+          if (fullContent.includes('[SPRINT:COMPLETE]')) {
+            sprintDone = true;
+          }
+
+          setTeamProgress({
+            phases: currentPhases,
+            activeRole: latestActiveRole,
+            baQuestions: detectedQuestions,
+            sprintComplete: sprintDone,
+          });
+
+          // Legacy phase markers
           if (fullContent.includes('[PHASE:validating]')) {
             setStreamPhase('validating');
           }
@@ -223,10 +308,13 @@ export function useChat(): UseChatReturn {
             setStreamPhase('writing');
           }
 
-          // Strip phase markers from content before parsing
+          // Strip all markers from content before parsing
           const cleanContent = fullContent
+            .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
+            .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
             .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
-            .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '');
+            .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '')
+            .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '');
 
           const { chatText, codeText } = splitStreamContent(cleanContent);
 
@@ -257,10 +345,12 @@ export function useChat(): UseChatReturn {
         // Stream complete
         setStreamPhase('complete');
 
-        // Clean phase markers from final content
         const cleanedFinal = fullContent
+          .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
+          .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
           .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
-          .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '');
+          .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '')
+          .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '');
 
         let newHtml = currentHtml;
         let result: ParseResult;
@@ -353,6 +443,14 @@ export function useChat(): UseChatReturn {
     [messages, isGenerating, currentHtml, saveProject, showToast]
   );
 
+  const answerBA = useCallback(
+    (answer: string) => {
+      if (!answer.trim()) return;
+      sendMessage(answer, 'build', answer);
+    },
+    [sendMessage]
+  );
+
   const stopGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
@@ -384,6 +482,9 @@ export function useChat(): UseChatReturn {
     setCurrentVersionIndex(-1);
     setStreamPhase('idle');
     setAgentName('');
+    setTeamProgress(INITIAL_TEAM_PROGRESS);
+    sprintContextRef.current = undefined;
+    originalRequestRef.current = '';
   }, []);
 
   const restoreVersion = useCallback(
@@ -410,7 +511,9 @@ export function useChat(): UseChatReturn {
     streamPhase,
     agentName,
     fileMap,
+    teamProgress,
     sendMessage,
+    answerBA,
     stopGeneration,
     loadProject,
     newChat,

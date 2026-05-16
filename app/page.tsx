@@ -34,7 +34,9 @@ export default function Home() {
     streamPhase,
     agentName,
     fileMap,
+    teamProgress,
     sendMessage,
+    answerBA,
     stopGeneration,
     loadProject,
     newChat,
@@ -115,6 +117,8 @@ export default function Home() {
       streamingLineCount={streamingLineCount}
       chatMode={chatMode}
       onModeChange={setChatMode}
+      teamProgress={teamProgress}
+      onAnswerBA={answerBA}
     />
   );
 

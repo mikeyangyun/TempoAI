@@ -7,7 +7,7 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { EmptyState } from '@/components/EmptyState';
 import { ChatMessage, ChatMode } from '@/types';
-import { StreamPhase } from '@/hooks/useChat';
+import { StreamPhase, TeamProgress } from '@/hooks/useChat';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -20,6 +20,8 @@ interface ChatPanelProps {
   streamingLineCount?: number;
   chatMode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
+  teamProgress?: TeamProgress;
+  onAnswerBA?: (answer: string) => void;
 }
 
 export function ChatPanel({
@@ -33,6 +35,8 @@ export function ChatPanel({
   streamingLineCount = 0,
   chatMode,
   onModeChange,
+  teamProgress,
+  onAnswerBA,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +83,8 @@ export function ChatPanel({
                   agentName={isLastAssistant ? agentName : undefined}
                   streamingLineCount={isLastAssistant ? streamingLineCount : undefined}
                   onImplementPlan={handleImplementPlan}
+                  teamProgress={isLastAssistant ? teamProgress : undefined}
+                  onAnswerBA={onAnswerBA}
                 />
               );
             })}
