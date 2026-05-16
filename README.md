@@ -181,11 +181,11 @@ pnpm dev
 
 ## Development Phases
 
-Implementation follows the phased plan in the [execution plan](.cursor/plans/). Each phase produces a testable deliverable; documentation is updated incrementally.
+Implementation follows the [**Execution Plan**](docs/EXECUTION_PLAN.md) — a step-by-step document with tasks, file lists, and verification checklists for each phase. Each phase produces a testable deliverable; documentation is updated incrementally.
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| 0 | Project scaffolding — Next.js + Tailwind + shadcn/ui + env | Pending |
+| 0 | Project scaffolding — Next.js + Tailwind + shadcn/ui + env | **Done** |
 | 1 | Core layout — split-pane Chat + Preview | Pending |
 | 2 | LLM integration — OpenRouter streaming + HTML parser | Pending |
 | 3 | Chat interaction — frontend streaming + message UI | Pending |
