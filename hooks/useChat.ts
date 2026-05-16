@@ -10,7 +10,7 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export type StreamPhase = 'idle' | 'analyzing' | 'routing' | 'writing' | 'complete';
+export type StreamPhase = 'idle' | 'analyzing' | 'routing' | 'writing' | 'validating' | 'fixing' | 'complete';
 
 /**
  * Splits streaming content into chat text and code text.
@@ -212,9 +212,24 @@ export function useChat(): UseChatReturn {
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
 
-          const { chatText, codeText } = splitStreamContent(fullContent);
+          // Detect phase markers from the orchestrator
+          if (fullContent.includes('[PHASE:validating]')) {
+            setStreamPhase('validating');
+          }
+          if (/\[PHASE:fixing:\d+\]/.test(fullContent)) {
+            setStreamPhase('fixing');
+          }
+          if (fullContent.includes('[PHASE:validated]')) {
+            setStreamPhase('writing');
+          }
 
-          // Transition to writing phase when code starts flowing
+          // Strip phase markers from content before parsing
+          const cleanContent = fullContent
+            .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
+            .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '');
+
+          const { chatText, codeText } = splitStreamContent(cleanContent);
+
           if (codeText && !phaseSetToWriting) {
             setStreamPhase('writing');
             phaseSetToWriting = true;
@@ -222,8 +237,8 @@ export function useChat(): UseChatReturn {
 
           setStreamingContent(codeText);
 
-          if (isMultiFileFormat(fullContent)) {
-            const partialFiles = parseMultiFileFence(fullContent);
+          if (isMultiFileFormat(cleanContent)) {
+            const partialFiles = parseMultiFileFence(cleanContent);
             if (Object.keys(partialFiles).length > 0) {
               setFileMap(partialFiles);
             }
@@ -242,21 +257,26 @@ export function useChat(): UseChatReturn {
         // Stream complete
         setStreamPhase('complete');
 
+        // Clean phase markers from final content
+        const cleanedFinal = fullContent
+          .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
+          .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '');
+
         let newHtml = currentHtml;
         let result: ParseResult;
 
-        if (isMultiFileFormat(fullContent)) {
-          const files = parseMultiFileFence(fullContent);
+        if (isMultiFileFormat(cleanedFinal)) {
+          const files = parseMultiFileFence(cleanedFinal);
           setFileMap(files);
           if (Object.keys(files).length > 0) {
             newHtml = mergeFilesToHtml(files);
             setCurrentHtml(newHtml);
-            result = { status: 'complete', html: newHtml, raw: fullContent };
+            result = { status: 'complete', html: newHtml, raw: cleanedFinal };
           } else {
-            result = { status: 'error', raw: fullContent };
+            result = { status: 'error', raw: cleanedFinal };
           }
         } else {
-          result = parseHtmlFence(fullContent);
+          result = parseHtmlFence(cleanedFinal);
           if (result.status === 'complete') {
             newHtml = result.html;
             setCurrentHtml(newHtml);
@@ -266,11 +286,11 @@ export function useChat(): UseChatReturn {
 
         setLastParseResult(result);
 
-        const { chatText: finalChatText } = splitStreamContent(fullContent);
+        const { chatText: finalChatText } = splitStreamContent(cleanedFinal);
         const finalMessages: ChatMessage[] = [...updatedMessages, {
           ...assistantMessage,
           content: finalChatText,
-          rawContent: fullContent,
+          rawContent: cleanedFinal,
         }];
         setMessages(finalMessages);
 

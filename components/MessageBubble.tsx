@@ -13,6 +13,7 @@ import {
   Sparkles,
   Lightbulb,
   Play,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface MessageBubbleProps {
@@ -271,9 +272,11 @@ function getAgentRole(agentName: string): string {
 
 function getStepCount(phase: StreamPhase, message: ChatMessage, isPlan: boolean): number {
   if (isPlan) return message.content ? 1 : 0;
-  if (message.rawContent) return 3;
+  if (message.rawContent) return 4;
   switch (phase) {
-    case 'complete': return 3;
+    case 'complete': return 4;
+    case 'fixing': return 4;
+    case 'validating': return 3;
     case 'writing': return 2;
     case 'routing': return 1;
     case 'analyzing': return 0;
@@ -291,17 +294,20 @@ interface ThinkingStepsProps {
 function ThinkingSteps({ streamPhase, isStreaming, agentName, lineCount }: ThinkingStepsProps) {
   const phase = isStreaming ? streamPhase : 'complete';
 
+  const phaseOrder = ['analyzing', 'routing', 'writing', 'validating', 'fixing', 'complete'];
+  const phaseIdx = phaseOrder.indexOf(phase);
+
   const steps = [
     {
       id: 'analyze',
       text: 'Analyzing the user\'s request and determining the best approach.',
-      done: phase !== 'idle' && phase !== 'analyzing',
+      done: phaseIdx > 0,
       active: phase === 'analyzing',
     },
     {
       id: 'route',
       text: `Routing to ${agentName || 'agent'} for code generation.`,
-      done: phase === 'writing' || phase === 'complete',
+      done: phaseIdx > 1,
       active: phase === 'routing',
     },
     {
@@ -309,9 +315,29 @@ function ThinkingSteps({ streamPhase, isStreaming, agentName, lineCount }: Think
       text: phase === 'writing'
         ? `Writing code${lineCount > 0 ? ` — ${lineCount} lines generated` : '...'}`
         : 'Code generation complete.',
-      done: phase === 'complete',
+      done: phaseIdx > 2,
       active: phase === 'writing',
     },
+    {
+      id: 'validate',
+      text: phase === 'validating'
+        ? 'Reviewing code quality...'
+        : 'Code quality verified.',
+      done: phase === 'complete' || phase === 'fixing',
+      active: phase === 'validating',
+    },
+    ...(phase === 'fixing' || (phase === 'complete' && phaseIdx >= 4)
+      ? [
+          {
+            id: 'fix',
+            text: phase === 'fixing'
+              ? 'Fixing issues found during review...'
+              : 'Issues resolved.',
+            done: phase === 'complete',
+            active: phase === 'fixing',
+          },
+        ]
+      : []),
   ];
 
   return (
