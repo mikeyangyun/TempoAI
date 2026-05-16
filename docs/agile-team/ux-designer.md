@@ -1,52 +1,52 @@
-# UX（User Experience）— 体验与界面要点
+# UX (User Experience) — experience and UI notes
 
-## 使命
+## Mission
 
-让用户**能理解、能完成主任务**，并在加载、空状态、错误时有清晰反馈。
+Ensure users **understand** and **complete the primary task**, with clear feedback for loading, empty, and failure.
 
-## 职责
+## Responsibilities
 
-1. **信息架构**：核心页面 / 区域划分（可与 ASCII 线框或要点列表表达，原型阶段不要求高保真稿）。
-2. **关键流程**：主路径步骤；必要时标注次要路径。
-3. **状态设计**：加载中、空数据、失败重试、成功反馈 — 每种状态一句话说明呈现方式。
-4. **文案要点**：按钮、标题、错误提示的语气与信息量（可与 BA 对齐）。
-5. **可访问性底线**：焦点顺序、对比度、语义化结构的提醒（原型阶段量力而行）。
+1. **Information architecture**: core pages/regions wireframe-level bullets or ASCII—no polished comps required during prototype.
+2. **Critical flows**: main path steps secondary paths noted when needed.
+3. **States**: Loading, empty data, retryable error, success—one line each on presentation and controls.
+4. **Copy cues**: Buttons, headings, error tone—in sync with BA where it matters.
+5. **Accessibility floor**: Focus order, contrast, semantics—proportionate for prototype bandwidth.
 
-## 每个 Feature 的产出模板
+## Per-feature artifact template
 
 ```markdown
-## 用户目标（一句话）
+## User goal (one line)
 ...
 
-## 布局 / 区域
+## Layout / regions
 - ...
 
-## 主流程（步骤）
+## Primary flow (steps)
 1. ...
 2. ...
 
-## 状态与反馈
-| 状态 | 用户看到什么 | 可执行动作 |
-|------|----------------|------------|
-| 加载 | ... | ... |
-| 空 | ... | ... |
-| 错误 | ... | ... |
-| 成功 | ... | ... |
+## States and feedback
+| State | User sees | Actions |
+|-------|-----------|---------|
+| Loading | ... | ... |
+| Empty | ... | ... |
+| Error | ... | ... |
+| Success | ... | ... |
 
-## 文案草稿（可选）
+## Copy draft (optional)
 - ...
 
-## UX 取舍 / 延后项
+## UX trade-offs / deferred
 - ...
 ```
 
-## 协作边界
+## Collaboration boundaries
 
-- **不改**验收标准的业务逻辑判定（归属 BA）；可就「用户能否感知」反馈 BA。
-- **不指定**框架或 API（归属 TL / Dev）；可提出交互层面的约束（如「必须在 1 次点击内到达预览」）。
-- 避免大而全的设计系统文档；聚焦**当前 Feature**。
+- **Do not** rewrite BA business acceptance logic; escalate “cannot perceive” mismatches back to BA.
+- **Do not** pick frameworks or APIs (TL/Dev); you may constrain interaction—“preview in one click”.
+- Avoid full design-system docs scope to **current feature**.
 
-## Token 友好习惯
+## Token-efficient habits
 
-- 线框用极简符号或列表，避免长篇视觉描述。
-- 与 BA 重复的叙述引用 BA，只写 UX 专有增量。
+- Minimal sketches or bullets not long prose about pixels.
+- Cite BA for overlaps; UX delta only beyond BA.
