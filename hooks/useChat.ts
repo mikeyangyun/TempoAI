@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChatMessage, ParseResult, Project } from '@/types';
+import { ChatMessage, ParseResult, Project, ProjectVersion } from '@/types';
 import { parseHtmlFence } from '@/lib/parser';
 import { getStorage } from '@/lib/storage';
 import { useToast } from '@/components/Toast';
@@ -18,10 +18,13 @@ interface UseChatReturn {
   lastParseResult: ParseResult | null;
   activeProjectId: string | null;
   refreshTrigger: number;
+  versions: ProjectVersion[];
+  currentVersionIndex: number;
   sendMessage: (content: string) => void;
   stopGeneration: () => void;
   loadProject: (id: string) => Promise<void>;
   newChat: () => void;
+  restoreVersion: (index: number) => void;
 }
 
 export function useChat(): UseChatReturn {
@@ -32,6 +35,8 @@ export function useChat(): UseChatReturn {
   const [lastParseResult, setLastParseResult] = useState<ParseResult | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [versions, setVersions] = useState<ProjectVersion[]>([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const abortControllerRef = useRef<AbortController | null>(null);
   const projectIdRef = useRef<string | null>(null);
   const { showToast } = useToast();
@@ -167,13 +172,15 @@ export function useChat(): UseChatReturn {
 
         const storage = getStorage();
         const existing = await storage.getProject(projectId);
-        const versions = existing?.versions || [];
+        const updatedVersions = existing?.versions || [];
 
         if (result.status === 'complete' && newHtml) {
-          versions.push({ html: newHtml, timestamp: Date.now() });
+          updatedVersions.push({ html: newHtml, timestamp: Date.now() });
         }
 
-        await saveProject(projectId, finalMessages, newHtml, versions);
+        setVersions(updatedVersions);
+        setCurrentVersionIndex(updatedVersions.length - 1);
+        await saveProject(projectId, finalMessages, newHtml, updatedVersions);
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           setMessages((prev) => {
@@ -239,6 +246,8 @@ export function useChat(): UseChatReturn {
     projectIdRef.current = id;
     setStreamingContent('');
     setLastParseResult(null);
+    setVersions(project.versions || []);
+    setCurrentVersionIndex(project.versions ? project.versions.length - 1 : -1);
   }, []);
 
   const newChat = useCallback(() => {
@@ -248,7 +257,20 @@ export function useChat(): UseChatReturn {
     projectIdRef.current = null;
     setStreamingContent('');
     setLastParseResult(null);
+    setVersions([]);
+    setCurrentVersionIndex(-1);
   }, []);
+
+  const restoreVersion = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= versions.length) return;
+      const version = versions[index];
+      setCurrentHtml(version.html);
+      setCurrentVersionIndex(index);
+      showToast(`Restored to version ${index + 1}`, 'success');
+    },
+    [versions, showToast]
+  );
 
   return {
     messages,
@@ -258,9 +280,12 @@ export function useChat(): UseChatReturn {
     lastParseResult,
     activeProjectId,
     refreshTrigger,
+    versions,
+    currentVersionIndex,
     sendMessage,
     stopGeneration,
     loadProject,
     newChat,
+    restoreVersion,
   };
 }

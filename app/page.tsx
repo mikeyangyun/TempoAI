@@ -19,10 +19,13 @@ export default function Home() {
     streamingContent,
     activeProjectId,
     refreshTrigger,
+    versions,
+    currentVersionIndex,
     sendMessage,
     stopGeneration,
     loadProject,
     newChat,
+    restoreVersion,
   } = useChat();
 
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -54,6 +57,9 @@ export default function Home() {
       html={currentHtml}
       isGenerating={isGenerating}
       streamingContent={streamingContent}
+      versions={versions}
+      currentVersionIndex={currentVersionIndex}
+      onRestoreVersion={restoreVersion}
     />
   );
 

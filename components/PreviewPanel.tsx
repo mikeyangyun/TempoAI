@@ -13,6 +13,8 @@ import {
   Download,
 } from 'lucide-react';
 import { IframePreviewEngine } from '@/lib/preview/iframe-engine';
+import { VersionTimeline } from '@/components/VersionTimeline';
+import { ProjectVersion } from '@/types';
 
 type ViewMode = 'preview' | 'code';
 
@@ -20,9 +22,19 @@ interface PreviewPanelProps {
   html?: string | null;
   isGenerating?: boolean;
   streamingContent?: string;
+  versions?: ProjectVersion[];
+  currentVersionIndex?: number;
+  onRestoreVersion?: (index: number) => void;
 }
 
-export function PreviewPanel({ html, isGenerating, streamingContent }: PreviewPanelProps) {
+export function PreviewPanel({
+  html,
+  isGenerating,
+  streamingContent,
+  versions = [],
+  currentVersionIndex = -1,
+  onRestoreVersion,
+}: PreviewPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const engineRef = useRef<IframePreviewEngine>(new IframePreviewEngine());
@@ -82,6 +94,14 @@ export function PreviewPanel({ html, isGenerating, streamingContent }: PreviewPa
         </Tabs>
 
         <div className="flex items-center gap-1">
+          {versions.length > 0 && onRestoreVersion && (
+            <VersionTimeline
+              versions={versions}
+              currentIndex={currentVersionIndex}
+              onRestore={onRestoreVersion}
+            />
+          )}
+
           <Tooltip>
             <TooltipTrigger
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
