@@ -1,9 +1,7 @@
 'use client';
 
 import { useRef, KeyboardEvent, RefObject } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Send, Square, Lightbulb, Hammer } from 'lucide-react';
+import { Send, Square, Lightbulb, Hammer, ArrowUp } from 'lucide-react';
 import { ChatMode } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -57,78 +55,82 @@ export function ChatInput({
   const isPlan = chatMode === 'plan';
 
   return (
-    <div className="border-t bg-background p-3">
-      {/* Mode toggle */}
-      <div className="flex items-center gap-1 mb-2">
-        <button
-          onClick={() => onModeChange('plan')}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200',
-            isPlan
-              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          <Lightbulb className="h-3 w-3" />
-          Plan
-        </button>
-        <button
-          onClick={() => onModeChange('build')}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200',
-            !isPlan
-              ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          <Hammer className="h-3 w-3" />
-          Build
-        </button>
-        <span className="ml-2 text-[10px] text-muted-foreground/50">
-          {isPlan ? 'AI will outline a plan first' : 'AI will generate code'}
-        </span>
-      </div>
-
-      {/* Input row */}
-      <div className="flex items-end gap-2">
-        <Textarea
+    <div className="shrink-0 border-t bg-background px-3 py-3">
+      <div className={cn(
+        'rounded-xl border bg-muted/30 transition-colors',
+        isPlan ? 'border-blue-500/20' : 'border-border/60',
+      )}>
+        {/* Textarea */}
+        <textarea
           ref={activeRef as RefObject<HTMLTextAreaElement>}
           placeholder={
             isPlan
               ? 'Describe what you want to plan...'
-              : 'Describe the app you want to build...'
+              : 'Ask the team to bring your idea to life'
           }
           className={cn(
-            'min-h-[44px] max-h-[200px] resize-none text-sm transition-colors',
-            isPlan && 'border-blue-500/20 focus-visible:ring-blue-500/20'
+            'w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm leading-relaxed placeholder:text-muted-foreground/50 focus:outline-none',
+            'min-h-[60px] max-h-[200px]',
           )}
-          rows={1}
+          rows={2}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           disabled={disabled}
         />
-        {isGenerating ? (
-          <Button
-            size="icon"
-            variant="destructive"
-            onClick={onStop}
-            className="shrink-0"
-          >
-            <Square className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={disabled}
-            className={cn(
-              'shrink-0 transition-colors',
-              isPlan && 'bg-blue-600 hover:bg-blue-700'
-            )}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        )}
+
+        {/* Bottom bar: mode toggle + send button */}
+        <div className="flex items-center justify-between px-3 pb-2.5">
+          {/* Mode toggles */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onModeChange('plan')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200',
+                isPlan
+                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20'
+                  : 'text-muted-foreground/60 hover:bg-muted hover:text-foreground'
+              )}
+            >
+              <Lightbulb className="h-3 w-3" />
+              Plan
+            </button>
+            <button
+              onClick={() => onModeChange('build')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200',
+                !isPlan
+                  ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20'
+                  : 'text-muted-foreground/60 hover:bg-muted hover:text-foreground'
+              )}
+            >
+              <Hammer className="h-3 w-3" />
+              Build
+            </button>
+          </div>
+
+          {/* Send / Stop button */}
+          {isGenerating ? (
+            <button
+              onClick={onStop}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={disabled}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-full transition-all disabled:opacity-40',
+                isPlan
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-foreground text-background hover:opacity-80'
+              )}
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
