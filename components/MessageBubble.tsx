@@ -558,41 +558,56 @@ interface PlanCardProps {
 }
 
 function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCardProps) {
+  const [collapsed, setCollapsed] = useState(false);
+  const lineCount = content.split('\n').filter(l => l.trim()).length;
+
   return (
     <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.03] dark:bg-blue-500/[0.06] overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-blue-500/10 bg-blue-500/[0.03]">
+      {/* Header - clickable to toggle */}
+      <button
+        onClick={() => !isStreaming && setCollapsed(!collapsed)}
+        className="flex w-full items-center gap-2 px-4 py-2.5 border-b border-blue-500/10 bg-blue-500/[0.03] text-left hover:bg-blue-500/[0.05] transition-colors"
+      >
         <Lightbulb className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
         <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Plan</span>
+        {!isStreaming && (
+          <span className="text-[10px] text-muted-foreground/40 ml-1">{lineCount} lines</span>
+        )}
         {isStreaming && (
           <div className="ml-auto flex items-center gap-1.5">
             <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
             <span className="text-[10px] text-blue-500/70">Planning...</span>
           </div>
         )}
-        {!isStreaming && showImplement && (
-          <span className="ml-auto text-[10px] text-muted-foreground/60">Review the plan, then click Build</span>
+        {!isStreaming && (
+          <div className="ml-auto">
+            {collapsed ? (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/40" />
+            )}
+          </div>
         )}
-      </div>
+      </button>
 
-      <div className="px-4 py-3 text-sm leading-relaxed text-foreground/80 max-h-[400px] overflow-y-auto">
-        <div className="whitespace-pre-wrap">{content}</div>
-        {isStreaming && <StreamingCursor />}
-      </div>
+      {/* Content - collapsible */}
+      {!collapsed && (
+        <div className="px-4 py-3 text-sm leading-relaxed text-foreground/80 max-h-[300px] overflow-y-auto">
+          <div className="whitespace-pre-wrap">{content}</div>
+          {isStreaming && <StreamingCursor />}
+        </div>
+      )}
 
+      {/* Build button - always visible when ready */}
       {showImplement && (
         <div className="px-4 py-3 border-t border-blue-500/10 bg-gradient-to-r from-blue-500/[0.03] to-violet-500/[0.03]">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onImplement}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <Rocket className="h-4 w-4" />
-              Build this
-            </button>
-            <span className="text-[11px] text-muted-foreground/60">
-              The agile team will start a sprint to build your app
-            </span>
-          </div>
+          <button
+            onClick={onImplement}
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Rocket className="h-4 w-4" />
+            Build this
+          </button>
         </div>
       )}
     </div>
