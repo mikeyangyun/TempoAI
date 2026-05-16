@@ -166,7 +166,7 @@ export default function Home() {
       </header>
 
       {isHomePage ? (
-        <HomePage onSend={handleSend} />
+        <HomePage onSend={handleSend} chatMode={chatMode} onModeChange={setChatMode} />
       ) : (
         <div className="flex flex-1 overflow-hidden">
           {!isMobile && (

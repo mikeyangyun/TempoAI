@@ -12,8 +12,12 @@ import {
   Zap,
   Globe,
   Sparkles,
+  Lightbulb,
+  Hammer,
 } from 'lucide-react';
 import { TempoLogo } from '@/components/TempoLogo';
+import { ChatMode } from '@/types';
+import { cn } from '@/lib/utils';
 
 const PROMPT_PILLS = [
   {
@@ -61,13 +65,16 @@ const STATS = [
 ];
 
 interface HomePageProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, mode?: ChatMode) => void;
+  chatMode: ChatMode;
+  onModeChange: (mode: ChatMode) => void;
 }
 
-export function HomePage({ onSend }: HomePageProps) {
+export function HomePage({ onSend, chatMode, onModeChange }: HomePageProps) {
   const [inputValue, setInputValue] = useState('');
   const [focusedPill, setFocusedPill] = useState(-1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isPlan = chatMode === 'plan';
 
   // Rotate pill highlight
   useEffect(() => {
@@ -80,7 +87,7 @@ export function HomePage({ onSend }: HomePageProps) {
   const handleSend = () => {
     const value = inputValue.trim();
     if (!value) return;
-    onSend(value);
+    onSend(value, chatMode);
     setInputValue('');
   };
 
@@ -143,27 +150,58 @@ export function HomePage({ onSend }: HomePageProps) {
         <div className="relative group animate-fade-in-up-delay-1">
           {/* Glow behind input */}
           <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-violet-500/20 via-blue-500/20 to-cyan-500/20 opacity-0 group-focus-within:opacity-100 blur-xl transition-opacity duration-500" />
-          <div className="relative rounded-2xl border bg-card/80 backdrop-blur-sm shadow-lg shadow-black/[0.03] dark:shadow-black/[0.15] focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-500/30 transition-all duration-300">
+          <div className={cn(
+            'relative rounded-2xl border bg-card/80 backdrop-blur-sm shadow-lg shadow-black/[0.03] dark:shadow-black/[0.15] focus-within:ring-2 transition-all duration-300',
+            isPlan
+              ? 'focus-within:ring-blue-500/20 focus-within:border-blue-500/30'
+              : 'focus-within:ring-violet-500/20 focus-within:border-violet-500/30'
+          )}>
             <textarea
               ref={textareaRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onInput={handleInput}
-              placeholder="Describe the app you want to build..."
+              placeholder={isPlan ? 'Describe what you want to plan...' : 'Describe the app you want to build...'}
               className="w-full resize-none bg-transparent px-5 pt-5 pb-14 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none min-h-[110px] max-h-[160px]"
               rows={3}
             />
             <div className="absolute bottom-3 left-4 flex items-center gap-2">
-              <span className="text-[10px] text-muted-foreground/40 font-mono">
-                Enter to send
-              </span>
+              <button
+                onClick={() => onModeChange('plan')}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200',
+                  isPlan
+                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20'
+                    : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50'
+                )}
+              >
+                <Lightbulb className="h-3 w-3" />
+                Plan
+              </button>
+              <button
+                onClick={() => onModeChange('build')}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-200',
+                  !isPlan
+                    ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20'
+                    : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50'
+                )}
+              >
+                <Hammer className="h-3 w-3" />
+                Build
+              </button>
             </div>
             <div className="absolute bottom-3 right-3">
               <button
                 onClick={handleSend}
                 disabled={!inputValue.trim()}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 transition-all hover:shadow-lg hover:shadow-violet-500/30 hover:scale-105 disabled:opacity-20 disabled:shadow-none disabled:hover:scale-100 disabled:cursor-not-allowed"
+                className={cn(
+                  'inline-flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-md transition-all hover:shadow-lg hover:scale-105 disabled:opacity-20 disabled:shadow-none disabled:hover:scale-100 disabled:cursor-not-allowed',
+                  isPlan
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 shadow-blue-500/20 hover:shadow-blue-500/30'
+                    : 'bg-gradient-to-r from-violet-600 to-blue-600 shadow-violet-500/20 hover:shadow-violet-500/30'
+                )}
               >
                 <ArrowUp className="h-4 w-4" />
               </button>
