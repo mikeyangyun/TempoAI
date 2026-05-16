@@ -19,11 +19,20 @@ export type TeamPhaseInfo = {
   title: string;
 };
 
+export type RoleSegment = {
+  role: TeamRole;
+  name: string;
+  title: string;
+  content: string;
+  status: 'active' | 'done' | 'fail';
+};
+
 export type TeamProgress = {
   phases: TeamPhaseInfo[];
   activeRole: TeamRole | null;
   baQuestions: string[] | null;
   sprintComplete: boolean;
+  roleSegments: RoleSegment[];
 };
 
 /**
@@ -119,7 +128,63 @@ const INITIAL_TEAM_PROGRESS: TeamProgress = {
   activeRole: null,
   baQuestions: null,
   sprintComplete: false,
+  roleSegments: [],
 };
+
+function parseRoleSegments(raw: string): RoleSegment[] {
+  const segments: RoleSegment[] = [];
+  const markerRegex = /\[TEAM:(\w+):(\w+):([^:]+):([^\]]+)\]/g;
+  const markers: { role: string; status: string; name: string; title: string; index: number }[] = [];
+
+  let m;
+  while ((m = markerRegex.exec(raw)) !== null) {
+    markers.push({ role: m[1], status: m[2], name: m[3], title: m[4], index: m.index });
+  }
+
+  for (let i = 0; i < markers.length; i++) {
+    const mk = markers[i];
+    if (mk.status !== 'start' && mk.status !== 'fix') continue;
+
+    const startIdx = mk.index + `[TEAM:${mk.role}:${mk.status}:${mk.name}:${mk.title}]`.length;
+
+    let endIdx = raw.length;
+    let finalStatus: 'active' | 'done' | 'fail' = 'active';
+    for (let j = i + 1; j < markers.length; j++) {
+      if (markers[j].role === mk.role && (markers[j].status === 'done' || markers[j].status === 'pass' || markers[j].status === 'fail' || markers[j].status === 'question')) {
+        endIdx = markers[j].index;
+        finalStatus = markers[j].status === 'fail' ? 'fail' : 'done';
+        break;
+      }
+      if (markers[j].status === 'start' || markers[j].status === 'fix') {
+        endIdx = markers[j].index;
+        finalStatus = 'done';
+        break;
+      }
+    }
+
+    let content = raw.slice(startIdx, endIdx)
+      .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
+      .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
+      .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
+      .trim();
+
+    const existingIdx = segments.findIndex(s => s.role === mk.role && s.status !== 'done');
+    if (mk.status === 'fix' && existingIdx >= 0) {
+      segments[existingIdx].content = content;
+      segments[existingIdx].status = finalStatus;
+    } else {
+      segments.push({
+        role: mk.role as TeamRole,
+        name: mk.name,
+        title: mk.title,
+        content,
+        status: finalStatus,
+      });
+    }
+  }
+
+  return segments;
+}
 
 export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -290,11 +355,14 @@ export function useChat(): UseChatReturn {
             sprintDone = true;
           }
 
+          const roleSegments = currentPhases.length > 0 ? parseRoleSegments(fullContent) : [];
+
           setTeamProgress({
             phases: currentPhases,
             activeRole: latestActiveRole,
             baQuestions: detectedQuestions,
             sprintComplete: sprintDone,
+            roleSegments,
           });
 
           // Legacy phase markers

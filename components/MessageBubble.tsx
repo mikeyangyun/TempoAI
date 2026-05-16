@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/types';
-import { StreamPhase, TeamProgress } from '@/hooks/useChat';
+import { StreamPhase, TeamProgress, RoleSegment } from '@/hooks/useChat';
 import {
   Check,
-  ChevronUp,
+  ChevronRight,
   ChevronDown,
   Copy,
   MoreHorizontal,
@@ -45,9 +45,7 @@ export function MessageBubble({
   teamProgress,
   onAnswerBA,
 }: MessageBubbleProps) {
-  const isUser = message.role === 'user';
-
-  if (isUser) {
+  if (message.role === 'user') {
     return (
       <div className="flex justify-end px-4 py-3">
         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-foreground/[0.06] dark:bg-foreground/10 px-4 py-2.5 text-sm leading-relaxed text-foreground">
@@ -71,15 +69,13 @@ export function MessageBubble({
   );
 }
 
-const ROLE_CONFIG: Record<string, { icon: typeof ClipboardList; color: string; gradient: string }> = {
-  ba: { icon: ClipboardList, color: 'text-amber-600 dark:text-amber-400', gradient: 'from-amber-500/20 to-orange-500/20' },
-  tl: { icon: Cpu, color: 'text-blue-600 dark:text-blue-400', gradient: 'from-blue-500/20 to-cyan-500/20' },
-  uiux: { icon: Palette, color: 'text-pink-600 dark:text-pink-400', gradient: 'from-pink-500/20 to-rose-500/20' },
-  dev: { icon: Code2, color: 'text-green-600 dark:text-green-400', gradient: 'from-green-500/20 to-emerald-500/20' },
-  qa: { icon: ShieldCheck, color: 'text-purple-600 dark:text-purple-400', gradient: 'from-purple-500/20 to-violet-500/20' },
+const ROLE_CONFIG: Record<string, { icon: typeof ClipboardList; color: string; gradient: string; label: string }> = {
+  ba: { icon: ClipboardList, color: 'text-amber-600 dark:text-amber-400', gradient: 'from-amber-500/20 to-orange-500/20', label: 'Requirements' },
+  tl: { icon: Cpu, color: 'text-blue-600 dark:text-blue-400', gradient: 'from-blue-500/20 to-cyan-500/20', label: 'Architecture' },
+  uiux: { icon: Palette, color: 'text-pink-600 dark:text-pink-400', gradient: 'from-pink-500/20 to-rose-500/20', label: 'Design' },
+  dev: { icon: Code2, color: 'text-green-600 dark:text-green-400', gradient: 'from-green-500/20 to-emerald-500/20', label: 'Development' },
+  qa: { icon: ShieldCheck, color: 'text-purple-600 dark:text-purple-400', gradient: 'from-purple-500/20 to-violet-500/20', label: 'QA Testing' },
 };
-
-const ROLE_ORDER = ['ba', 'tl', 'uiux', 'dev', 'qa'] as const;
 
 interface AssistantMessageProps {
   message: ChatMessage;
@@ -111,8 +107,7 @@ function AssistantMessage({
   const displayAgentName = isSprintTeam ? 'Sprint Team' : (effectiveAgentName || 'Tempo');
   const agentRole = isSprintTeam ? 'Agile Development' : getAgentRole(effectiveAgentName);
 
-  const isComplete = !isStreaming && (!!message.rawContent || !!message.content);
-  const showTeamSteps = isSprintTeam && teamProgress && teamProgress.phases.length > 0;
+  const showTeamCards = isSprintTeam && teamProgress && teamProgress.roleSegments.length > 0;
   const showLegacySteps = (isStreaming || message.rawContent) && !isPlannerAgent && !isSprintTeam;
 
   const handleCopy = () => {
@@ -164,51 +159,57 @@ function AssistantMessage({
         )}
       </div>
 
-      {/* Team sprint progress timeline */}
-      {showTeamSteps && (
-        <div className="ml-10 mb-3">
-          <button
-            onClick={() => setStepsExpanded(!stepsExpanded)}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-          >
-            {teamProgress.sprintComplete ? (
-              <Check className="h-4 w-4 text-green-500" />
-            ) : (
-              <div className="h-4 w-4 flex items-center justify-center">
-                <div className="h-2 w-2 animate-pulse rounded-full bg-violet-500" />
-              </div>
-            )}
-            <span className="font-medium">
-              {teamProgress.sprintComplete
-                ? 'Sprint complete — MVP shipped'
-                : `Sprint in progress...`}
-            </span>
-            {stepsExpanded ? (
-              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground/60" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" />
-            )}
-          </button>
+      {/* Sprint team: collapsible role cards */}
+      {showTeamCards && (
+        <div className="ml-10 mb-3 space-y-1.5">
+          {teamProgress.roleSegments.map((seg, idx) => (
+            <RoleCard
+              key={`${seg.role}-${idx}`}
+              segment={seg}
+              isActive={teamProgress.activeRole === seg.role && seg.status === 'active'}
+            />
+          ))}
 
-          {stepsExpanded && (
-            <div className="mt-3 space-y-0.5">
-              <TeamTimeline
-                teamProgress={teamProgress}
-                isStreaming={!!isStreaming}
-              />
+          {/* BA Question Card */}
+          {teamProgress.baQuestions && teamProgress.baQuestions.length > 0 && !teamProgress.sprintComplete && (
+            <QuestionCard
+              questions={teamProgress.baQuestions}
+              onAnswer={onAnswerBA}
+              disabled={!!isStreaming}
+            />
+          )}
+
+          {/* Waiting indicator when streaming but no segments yet for active role */}
+          {isStreaming && teamProgress.activeRole && !teamProgress.sprintComplete && (
+            <div className="flex items-center gap-2 pl-1 pt-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+              <span className="text-[11px] text-muted-foreground/60">
+                {(() => {
+                  const activeSeg = teamProgress.roleSegments.find(
+                    s => s.role === teamProgress.activeRole && s.status === 'active'
+                  );
+                  if (activeSeg && activeSeg.content) return null;
+                  const cfg = ROLE_CONFIG[teamProgress.activeRole!];
+                  return cfg ? `${cfg.label}...` : 'Working...';
+                })()}
+              </span>
             </div>
+          )}
+
+          {/* Sprint complete summary */}
+          {teamProgress.sprintComplete && (
+            <SprintSummaryCard roleSegments={teamProgress.roleSegments} />
           )}
         </div>
       )}
 
-      {/* BA Question Card */}
-      {teamProgress?.baQuestions && teamProgress.baQuestions.length > 0 && !teamProgress.sprintComplete && (
+      {/* Sprint team: show "analyzing" when no segments yet */}
+      {isSprintTeam && isStreaming && (!teamProgress || teamProgress.roleSegments.length === 0) && (
         <div className="ml-10 mb-3">
-          <QuestionCard
-            questions={teamProgress.baQuestions}
-            onAnswer={onAnswerBA}
-            disabled={!!isStreaming}
-          />
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+            <span className="text-[11px] text-muted-foreground/60">Starting sprint...</span>
+          </div>
         </div>
       )}
 
@@ -217,9 +218,9 @@ function AssistantMessage({
         <div className="ml-10 mb-3">
           <button
             onClick={() => setStepsExpanded(!stepsExpanded)}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            {isComplete ? (
+            {!isStreaming ? (
               <Check className="h-4 w-4 text-muted-foreground" />
             ) : (
               <div className="h-4 w-4 flex items-center justify-center">
@@ -227,14 +228,14 @@ function AssistantMessage({
               </div>
             )}
             <span className="font-medium">
-              {isComplete
+              {!isStreaming
                 ? `Processed ${getStepCount(streamPhase, message, isPlannerAgent)} steps`
                 : `Processing${streamPhase === 'writing' ? ` (${streamingLineCount} lines)` : '...'}`}
             </span>
             {stepsExpanded ? (
-              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground/60" />
-            ) : (
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
             )}
           </button>
 
@@ -243,7 +244,7 @@ function AssistantMessage({
               <ThinkingSteps
                 streamPhase={streamPhase}
                 isStreaming={!!isStreaming}
-                agentName={agentName}
+                agentName={effectiveAgentName}
                 lineCount={streamingLineCount}
               />
             </div>
@@ -261,7 +262,7 @@ function AssistantMessage({
             showImplement={!!onImplementPlan && !isStreaming}
           />
         </div>
-      ) : (
+      ) : !isSprintTeam ? (
         <>
           {message.content && (
             <div className="ml-10 text-sm leading-relaxed text-foreground/80">
@@ -270,7 +271,7 @@ function AssistantMessage({
             </div>
           )}
 
-          {!message.content && isStreaming && !showTeamSteps && streamPhase === 'analyzing' && (
+          {!message.content && isStreaming && streamPhase === 'analyzing' && (
             <div className="ml-10 text-sm text-muted-foreground">
               <StreamingDots />
             </div>
@@ -278,14 +279,14 @@ function AssistantMessage({
 
           {!isStreaming && message.rawContent && (
             <div className="ml-10 mt-3">
-              {teamProgress?.sprintComplete ? <SprintCompleteCard /> : <GeneratedAppCard />}
+              <GeneratedAppCard />
             </div>
           )}
         </>
-      )}
+      ) : null}
 
       {/* Action bar */}
-      {!isStreaming && message.content && (
+      {!isStreaming && message.content && !isSprintTeam && (
         <div className="ml-10 mt-2 flex items-center gap-1">
           <button
             onClick={handleCopy}
@@ -302,116 +303,137 @@ function AssistantMessage({
   );
 }
 
-// --- Team Timeline ---
+// --- Collapsible Role Card ---
 
-interface TeamTimelineProps {
-  teamProgress: TeamProgress;
-  isStreaming: boolean;
+interface RoleCardProps {
+  segment: RoleSegment;
+  isActive: boolean;
 }
 
-function TeamTimeline({ teamProgress, isStreaming }: TeamTimelineProps) {
-  const { phases, activeRole } = teamProgress;
+function RoleCard({ segment, isActive }: RoleCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const config = ROLE_CONFIG[segment.role];
+  if (!config) return null;
 
-  const roleState = (role: string): 'pending' | 'active' | 'done' | 'fail' => {
-    const rolePhases = phases.filter(p => p.role === role);
-    if (rolePhases.length === 0) return 'pending';
-    const last = rolePhases[rolePhases.length - 1];
-    if (last.status === 'done' || last.status === 'pass') return 'done';
-    if (last.status === 'fail') return 'fail';
-    if (last.status === 'start' || last.status === 'fix' || last.status === 'question') return 'active';
-    return 'pending';
-  };
+  const Icon = config.icon;
+  const isDone = segment.status === 'done';
+  const isFail = segment.status === 'fail';
+  const showExpanded = isActive || expanded;
 
-  const getRoleName = (role: string): string => {
-    const match = phases.find(p => p.role === role);
-    return match?.name || '';
-  };
-
-  const getRoleTitle = (role: string): string => {
-    const match = phases.find(p => p.role === role);
-    return match?.title || '';
-  };
+  const contentPreview = segment.content
+    ? segment.content.split('\n').filter(l => l.trim()).slice(0, 2).join(' ').slice(0, 80)
+    : '';
 
   return (
-    <div className="relative">
-      {ROLE_ORDER.map((role, idx) => {
-        const state = roleState(role);
-        const config = ROLE_CONFIG[role];
-        const Icon = config.icon;
-        const name = getRoleName(role);
-        const title = getRoleTitle(role);
-        const isLast = idx === ROLE_ORDER.length - 1;
+    <div className={cn(
+      'rounded-lg border transition-all duration-200',
+      isActive
+        ? 'border-violet-500/20 bg-violet-500/[0.02]'
+        : isDone
+          ? 'border-border/50 bg-transparent'
+          : isFail
+            ? 'border-red-500/20 bg-red-500/[0.02]'
+            : 'border-border/30'
+    )}>
+      <button
+        onClick={() => !isActive && setExpanded(!expanded)}
+        className={cn(
+          'flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors',
+          !isActive && 'hover:bg-muted/30 rounded-lg'
+        )}
+      >
+        {/* Status indicator */}
+        <div className={cn(
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+          isActive && `bg-gradient-to-br ${config.gradient}`,
+          isDone && 'bg-muted/60',
+          isFail && 'bg-red-500/10',
+          !isActive && !isDone && !isFail && 'bg-muted/30'
+        )}>
+          {isDone ? (
+            <Check className="h-3 w-3 text-muted-foreground/50" />
+          ) : isFail ? (
+            <span className="text-[8px] font-bold text-red-500">!</span>
+          ) : isActive ? (
+            <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+          ) : (
+            <Icon className="h-3 w-3 text-muted-foreground/30" />
+          )}
+        </div>
 
-        return (
-          <div key={role} className="relative flex items-start gap-3 group">
-            {/* Vertical connector line */}
-            {!isLast && (
-              <div
-                className={cn(
-                  'absolute left-[13px] top-[28px] w-0.5 h-[calc(100%-12px)]',
-                  state === 'done' || state === 'fail'
-                    ? 'bg-muted-foreground/20'
-                    : state === 'active'
-                      ? 'bg-gradient-to-b from-violet-500/40 to-transparent'
-                      : 'bg-muted-foreground/10'
-                )}
-              />
+        {/* Role name + title */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={cn(
+              'text-[12px] font-semibold',
+              isActive ? config.color : 'text-muted-foreground/70'
+            )}>
+              {segment.name}
+            </span>
+            <span className="text-[10px] text-muted-foreground/40">{segment.title}</span>
+            {isActive && (
+              <span className="text-[9px] text-violet-500/70 font-medium ml-1">Working...</span>
             )}
-
-            {/* Role icon */}
-            <div
-              className={cn(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300 z-10',
-                state === 'active'
-                  ? `bg-gradient-to-br ${config.gradient} border-transparent shadow-sm`
-                  : state === 'done'
-                    ? 'bg-muted/50 border-muted-foreground/20'
-                    : state === 'fail'
-                      ? 'bg-red-500/10 border-red-500/30'
-                      : 'bg-muted/30 border-dashed border-muted-foreground/15'
-              )}
-            >
-              {state === 'done' ? (
-                <Check className="h-3.5 w-3.5 text-muted-foreground/60" />
-              ) : state === 'fail' ? (
-                <span className="text-[10px] text-red-500 font-bold">!</span>
-              ) : (
-                <Icon className={cn('h-3.5 w-3.5', state === 'active' ? config.color : 'text-muted-foreground/30')} />
-              )}
-            </div>
-
-            {/* Role info */}
-            <div className={cn('flex-1 pb-4 min-w-0', state === 'pending' && 'opacity-40')}>
-              <div className="flex items-center gap-2">
-                <span className={cn(
-                  'text-[13px] font-semibold',
-                  state === 'active' ? 'text-foreground' : 'text-muted-foreground'
-                )}>
-                  {name || role.toUpperCase()}
-                </span>
-                {title && (
-                  <span className="text-[11px] text-muted-foreground/60">{title}</span>
-                )}
-
-                {state === 'active' && (
-                  <div className="flex items-center gap-1.5 ml-1">
-                    <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
-                    <span className="text-[10px] text-violet-500/70 font-medium">Working...</span>
-                  </div>
-                )}
-
-                {state === 'done' && (
-                  <span className="text-[10px] text-muted-foreground/50">Done</span>
-                )}
-
-                {state === 'fail' && (
-                  <span className="text-[10px] text-red-500/80 font-medium">Issues found</span>
-                )}
-              </div>
-            </div>
           </div>
-        );
-      })}
+          {/* Preview when collapsed */}
+          {!showExpanded && contentPreview && (
+            <p className="text-[11px] text-muted-foreground/40 truncate mt-0.5">
+              {contentPreview}...
+            </p>
+          )}
+        </div>
+
+        {/* Expand toggle */}
+        {!isActive && segment.content && (
+          <div className="shrink-0">
+            {expanded ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/30" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30" />
+            )}
+          </div>
+        )}
+      </button>
+
+      {/* Expanded content */}
+      {showExpanded && segment.content && (
+        <div className={cn(
+          'px-3 pb-3 pt-0',
+          isActive ? 'border-t border-violet-500/10 mt-0' : 'border-t border-border/30'
+        )}>
+          <div className="mt-2 text-[12px] leading-relaxed text-muted-foreground/70 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+            {segment.content}
+            {isActive && <StreamingCursor />}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Sprint Summary Card ---
+
+interface SprintSummaryCardProps {
+  roleSegments: RoleSegment[];
+}
+
+function SprintSummaryCard({ roleSegments }: SprintSummaryCardProps) {
+  const qaPass = roleSegments.some(s => s.role === 'qa' && s.status === 'done');
+  const completedRoles = roleSegments.filter(s => s.status === 'done').length;
+
+  return (
+    <div className="mt-2 rounded-xl border border-green-500/20 bg-green-500/[0.03] dark:bg-green-500/[0.05] overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/10">
+          <Rocket className="h-4.5 w-4.5 text-green-600 dark:text-green-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-foreground">MVP Shipped</p>
+          <p className="text-[11px] text-muted-foreground">
+            {completedRoles} roles completed{qaPass ? ' — QA passed' : ''} — view in preview panel
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -561,50 +583,20 @@ interface ThinkingStepsProps {
 
 function ThinkingSteps({ streamPhase, isStreaming, agentName, lineCount }: ThinkingStepsProps) {
   const phase = isStreaming ? streamPhase : 'complete';
-
   const phaseOrder = ['analyzing', 'routing', 'writing', 'validating', 'fixing', 'complete'];
   const phaseIdx = phaseOrder.indexOf(phase);
 
   const steps = [
-    {
-      id: 'analyze',
-      text: 'Analyzing the user\'s request and determining the best approach.',
-      done: phaseIdx > 0,
-      active: phase === 'analyzing',
-    },
-    {
-      id: 'route',
-      text: `Routing to ${agentName || 'agent'} for code generation.`,
-      done: phaseIdx > 1,
-      active: phase === 'routing',
-    },
+    { id: 'analyze', text: 'Analyzing request...', done: phaseIdx > 0, active: phase === 'analyzing' },
+    { id: 'route', text: `Routing to ${agentName || 'agent'}.`, done: phaseIdx > 1, active: phase === 'routing' },
     {
       id: 'write',
-      text: phase === 'writing'
-        ? `Writing code${lineCount > 0 ? ` — ${lineCount} lines generated` : '...'}`
-        : 'Code generation complete.',
-      done: phaseIdx > 2,
-      active: phase === 'writing',
+      text: phase === 'writing' ? `Writing code${lineCount > 0 ? ` — ${lineCount} lines` : '...'}` : 'Code complete.',
+      done: phaseIdx > 2, active: phase === 'writing',
     },
-    {
-      id: 'validate',
-      text: phase === 'validating'
-        ? 'Reviewing code quality...'
-        : 'Code quality verified.',
-      done: phase === 'complete' || phase === 'fixing',
-      active: phase === 'validating',
-    },
+    { id: 'validate', text: phase === 'validating' ? 'Reviewing...' : 'Verified.', done: phase === 'complete' || phase === 'fixing', active: phase === 'validating' },
     ...(phase === 'fixing' || (phase === 'complete' && phaseIdx >= 4)
-      ? [
-          {
-            id: 'fix',
-            text: phase === 'fixing'
-              ? 'Fixing issues found during review...'
-              : 'Issues resolved.',
-            done: phase === 'complete',
-            active: phase === 'fixing',
-          },
-        ]
+      ? [{ id: 'fix', text: phase === 'fixing' ? 'Fixing...' : 'Resolved.', done: phase === 'complete', active: phase === 'fixing' }]
       : []),
   ];
 
@@ -621,34 +613,11 @@ function ThinkingSteps({ streamPhase, isStreaming, agentName, lineCount }: Think
                 <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
               )}
             </div>
-            <span className="text-[13px] leading-relaxed text-muted-foreground">
-              {step.text}
-              {step.id === 'route' && agentName && (
-                <code className="ml-1 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-muted-foreground">
-                  {agentName}
-                </code>
-              )}
-            </span>
+            <span className="text-[13px] leading-relaxed text-muted-foreground">{step.text}</span>
           </div>
         );
       })}
     </>
-  );
-}
-
-function SprintCompleteCard() {
-  return (
-    <div className="flex items-center justify-between rounded-xl border border-green-500/20 bg-green-500/[0.04] px-4 py-3 max-w-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10">
-          <Rocket className="h-4 w-4 text-green-600 dark:text-green-400" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-foreground">MVP Shipped</p>
-          <p className="text-xs text-muted-foreground">Sprint complete — view in preview &rarr;</p>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -664,7 +633,6 @@ function GeneratedAppCard() {
           <p className="text-xs text-muted-foreground">View in the preview panel &rarr;</p>
         </div>
       </div>
-      <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
     </div>
   );
 }
