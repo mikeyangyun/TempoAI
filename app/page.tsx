@@ -11,6 +11,7 @@ export default function Home() {
     messages,
     isGenerating,
     currentHtml,
+    streamingContent,
     sendMessage,
     stopGeneration,
   } = useChat();
@@ -37,6 +38,7 @@ export default function Home() {
             <PreviewPanel
               html={currentHtml}
               isGenerating={isGenerating}
+              streamingContent={streamingContent}
             />
           }
           defaultLeftWidth={38}

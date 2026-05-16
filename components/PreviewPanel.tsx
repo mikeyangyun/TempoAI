@@ -1,31 +1,65 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RotateCw, ExternalLink, Code, Eye, MonitorSmartphone } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  RotateCw,
+  ExternalLink,
+  Code,
+  Eye,
+  MonitorSmartphone,
+  Download,
+} from 'lucide-react';
+import { IframePreviewEngine } from '@/lib/preview/iframe-engine';
 
 type ViewMode = 'preview' | 'code';
 
 interface PreviewPanelProps {
   html?: string | null;
   isGenerating?: boolean;
+  streamingContent?: string;
 }
 
-export function PreviewPanel({ html, isGenerating }: PreviewPanelProps) {
+export function PreviewPanel({ html, isGenerating, streamingContent }: PreviewPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
-  const [iframeKey, setIframeKey] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const engineRef = useRef<IframePreviewEngine>(new IframePreviewEngine());
 
-  const handleReload = () => {
-    setIframeKey((k) => k + 1);
-  };
+  // Bind iframe to engine when mounted
+  useEffect(() => {
+    if (iframeRef.current) {
+      engineRef.current.bind(iframeRef.current);
+    }
+  }, []);
 
-  const handleOpenNewTab = () => {
+  // Inject HTML when it changes
+  useEffect(() => {
+    if (html) {
+      engineRef.current.inject(html);
+      setViewMode('preview');
+    }
+  }, [html]);
+
+  const handleReload = useCallback(() => {
+    engineRef.current.reload();
+  }, []);
+
+  const handleOpenNewTab = useCallback(() => {
+    engineRef.current.openInNewTab();
+  }, []);
+
+  const handleDownload = useCallback(() => {
     if (!html) return;
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-  };
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tempo-app.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [html]);
 
   return (
     <div className="flex h-full flex-col bg-muted/30">
@@ -50,7 +84,7 @@ export function PreviewPanel({ html, isGenerating }: PreviewPanelProps) {
         <div className="flex items-center gap-1">
           <Tooltip>
             <TooltipTrigger
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
               onClick={handleReload}
               disabled={!html}
             >
@@ -61,7 +95,7 @@ export function PreviewPanel({ html, isGenerating }: PreviewPanelProps) {
 
           <Tooltip>
             <TooltipTrigger
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
               onClick={handleOpenNewTab}
               disabled={!html}
             >
@@ -69,86 +103,84 @@ export function PreviewPanel({ html, isGenerating }: PreviewPanelProps) {
             </TooltipTrigger>
             <TooltipContent>Open in new tab</TooltipContent>
           </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              onClick={handleDownload}
+              disabled={!html}
+            >
+              <Download className="h-3.5 w-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>Download HTML</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {viewMode === 'preview' ? (
-          <PreviewView
-            html={html}
-            isGenerating={isGenerating}
-            iframeKey={iframeKey}
-          />
-        ) : (
-          <CodeView html={html} />
+      <div className="relative flex-1 overflow-hidden">
+        {/* Live iframe — always mounted, hidden when not in preview mode or no content */}
+        <iframe
+          ref={iframeRef}
+          sandbox="allow-scripts allow-forms allow-modals allow-popups"
+          className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity duration-200 ${
+            viewMode === 'preview' && html && !isGenerating
+              ? 'opacity-100 z-10'
+              : 'opacity-0 z-0 pointer-events-none'
+          }`}
+          title="App Preview"
+        />
+
+        {/* Streaming code preview — shown during generation */}
+        {isGenerating && (
+          <div className="absolute inset-0 z-10 flex flex-col">
+            <div className="flex items-center gap-2 bg-zinc-900 px-4 py-2 border-b border-zinc-700">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+              <span className="text-xs text-zinc-400">Generating...</span>
+            </div>
+            <ScrollArea className="flex-1 bg-zinc-950">
+              <pre className="p-4 text-xs text-zinc-300 font-mono leading-relaxed whitespace-pre-wrap">
+                <code>{streamingContent || 'Waiting for response...'}</code>
+                <span className="inline-block h-4 w-1.5 animate-pulse bg-green-400 ml-0.5" />
+              </pre>
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Code view */}
+        {viewMode === 'code' && !isGenerating && (
+          <div className="absolute inset-0 z-10">
+            {html ? (
+              <ScrollArea className="h-full bg-zinc-950">
+                <pre className="p-4 text-xs text-zinc-300 font-mono leading-relaxed whitespace-pre-wrap">
+                  <code>{html}</code>
+                </pre>
+              </ScrollArea>
+            ) : (
+              <div className="flex h-full items-center justify-center text-muted-foreground text-sm bg-background">
+                No code generated yet.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state — shown when nothing is generated and not generating */}
+        {!html && !isGenerating && viewMode === 'preview' && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center px-8 bg-background">
+            <div className="text-center space-y-4">
+              <MonitorSmartphone className="mx-auto h-12 w-12 text-muted-foreground/40" />
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-muted-foreground">
+                  Your app will appear here
+                </p>
+                <p className="text-sm text-muted-foreground/70">
+                  Describe what you want to build in the chat panel
+                </p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
-  );
-}
-
-function PreviewView({
-  html,
-  isGenerating,
-  iframeKey,
-}: {
-  html?: string | null;
-  isGenerating?: boolean;
-  iframeKey: number;
-}) {
-  if (isGenerating) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Generating your app...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!html) {
-    return (
-      <div className="flex h-full items-center justify-center px-8">
-        <div className="text-center space-y-4">
-          <MonitorSmartphone className="mx-auto h-12 w-12 text-muted-foreground/40" />
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-muted-foreground">
-              Your app will appear here
-            </p>
-            <p className="text-sm text-muted-foreground/70">
-              Describe what you want to build in the chat panel
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <iframe
-      key={iframeKey}
-      srcDoc={html}
-      sandbox="allow-scripts allow-forms allow-modals allow-popups"
-      className="h-full w-full border-0 bg-white"
-      title="App Preview"
-    />
-  );
-}
-
-function CodeView({ html }: { html?: string | null }) {
-  if (!html) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-        No code generated yet.
-      </div>
-    );
-  }
-
-  return (
-    <pre className="h-full overflow-auto bg-zinc-950 p-4 text-xs text-zinc-300 font-mono leading-relaxed">
-      <code>{html}</code>
-    </pre>
   );
 }

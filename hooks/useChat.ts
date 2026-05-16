@@ -12,6 +12,7 @@ interface UseChatReturn {
   messages: ChatMessage[];
   isGenerating: boolean;
   currentHtml: string | null;
+  streamingContent: string;
   lastParseResult: ParseResult | null;
   sendMessage: (content: string) => void;
   stopGeneration: () => void;
@@ -23,6 +24,7 @@ export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentHtml, setCurrentHtml] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState('');
   const [lastParseResult, setLastParseResult] = useState<ParseResult | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -40,6 +42,7 @@ export function useChat(): UseChatReturn {
       const updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
       setIsGenerating(true);
+      setStreamingContent('');
       setLastParseResult(null);
 
       const assistantMessage: ChatMessage = {
@@ -84,6 +87,9 @@ export function useChat(): UseChatReturn {
 
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
+
+          // Update streaming content for preview panel
+          setStreamingContent(fullContent);
 
           // Update the assistant message progressively
           setMessages((prev) => {
@@ -152,6 +158,7 @@ export function useChat(): UseChatReturn {
     messages,
     isGenerating,
     currentHtml,
+    streamingContent,
     lastParseResult,
     sendMessage,
     stopGeneration,
