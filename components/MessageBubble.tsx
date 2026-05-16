@@ -105,10 +105,11 @@ function AssistantMessage({
   const [stepsExpanded, setStepsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const isPlannerAgent = agentName === 'Planner' || agentName.toLowerCase().includes('plan');
-  const isSprintTeam = agentName === 'SprintTeam';
-  const displayAgentName = isSprintTeam ? 'Sprint Team' : (agentName || 'Tempo');
-  const agentRole = isSprintTeam ? 'Agile Development' : getAgentRole(agentName);
+  const effectiveAgentName = agentName || message.agentName || '';
+  const isPlannerAgent = effectiveAgentName === 'Planner' || effectiveAgentName.toLowerCase().includes('plan');
+  const isSprintTeam = effectiveAgentName === 'SprintTeam';
+  const displayAgentName = isSprintTeam ? 'Sprint Team' : (effectiveAgentName || 'Tempo');
+  const agentRole = isSprintTeam ? 'Agile Development' : getAgentRole(effectiveAgentName);
 
   const isComplete = !isStreaming && (!!message.rawContent || !!message.content);
   const showTeamSteps = isSprintTeam && teamProgress && teamProgress.phases.length > 0;

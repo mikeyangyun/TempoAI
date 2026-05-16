@@ -85,7 +85,7 @@ export function ChatPanel({
                   message={msg}
                   isStreaming={isLastAssistant}
                   streamPhase={isLastAssistant ? streamPhase : undefined}
-                  agentName={isLastAssistant ? agentName : undefined}
+                  agentName={isLastAssistant ? agentName : msg.agentName}
                   streamingLineCount={isLastAssistant ? streamingLineCount : undefined}
                   onImplementPlan={handleImplementPlan}
                   teamProgress={isLastAssistant ? teamProgress : undefined}

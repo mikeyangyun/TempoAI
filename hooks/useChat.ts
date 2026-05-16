@@ -377,10 +377,12 @@ export function useChat(): UseChatReturn {
         setLastParseResult(result);
 
         const { chatText: finalChatText } = splitStreamContent(cleanedFinal);
+        const currentAgentName = agentName || headerAgentName;
         const finalMessages: ChatMessage[] = [...updatedMessages, {
           ...assistantMessage,
           content: finalChatText,
           rawContent: cleanedFinal,
+          agentName: currentAgentName,
         }];
         setMessages(finalMessages);
 
