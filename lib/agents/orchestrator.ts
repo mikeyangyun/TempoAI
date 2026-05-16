@@ -18,7 +18,8 @@ export class Orchestrator {
 
   async execute(context: AgentContext): Promise<AgentResult> {
     const agent = this.selectAgent(context);
-    return agent.execute(context);
+    const result = await agent.execute(context);
+    return { ...result, agentName: agent.name };
   }
 
   private selectAgent(context: AgentContext): BaseAgent {

@@ -48,4 +48,5 @@ export type AgentContext = {
 
 export type AgentResult = {
   stream: AsyncIterable<string>;
+  agentName?: string;
 };

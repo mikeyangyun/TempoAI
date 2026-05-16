@@ -10,11 +10,8 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/**
- * Splits streaming content into text (for chat) and code (for preview).
- * Text = everything outside ```html ... ``` fences.
- * Code = everything inside the fence.
- */
+export type StreamPhase = 'idle' | 'analyzing' | 'routing' | 'writing' | 'complete';
+
 function splitStreamContent(fullText: string): { chatText: string; codeText: string } {
   const fenceOpenRegex = /```html\s*\n?/;
   const fenceCloseRegex = /\n?```/;
@@ -32,11 +29,9 @@ function splitStreamContent(fullText: string): { chatText: string; codeText: str
   const closeMatch = contentAfterOpen.match(fenceCloseRegex);
 
   if (!closeMatch || closeMatch.index === undefined) {
-    // Fence open but not closed — still streaming code
     return { chatText: beforeFence.trim(), codeText: contentAfterOpen };
   }
 
-  // Fence closed — code complete, grab any text after
   const code = contentAfterOpen.slice(0, closeMatch.index);
   const afterClose = contentAfterOpen.slice(closeMatch.index + closeMatch[0].length);
   const chatText = (beforeFence + afterClose).trim();
@@ -54,6 +49,8 @@ interface UseChatReturn {
   refreshTrigger: number;
   versions: ProjectVersion[];
   currentVersionIndex: number;
+  streamPhase: StreamPhase;
+  agentName: string;
   sendMessage: (content: string) => void;
   stopGeneration: () => void;
   loadProject: (id: string) => Promise<void>;
@@ -71,6 +68,8 @@ export function useChat(): UseChatReturn {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
+  const [streamPhase, setStreamPhase] = useState<StreamPhase>('idle');
+  const [agentName, setAgentName] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
   const projectIdRef = useRef<string | null>(null);
   const { showToast } = useToast();
@@ -129,6 +128,8 @@ export function useChat(): UseChatReturn {
       setIsGenerating(true);
       setStreamingContent('');
       setLastParseResult(null);
+      setStreamPhase('analyzing');
+      setAgentName('');
 
       const assistantMessage: ChatMessage = {
         id: generateId(),
@@ -162,11 +163,17 @@ export function useChat(): UseChatReturn {
           throw err;
         }
 
+        // Read agent name from response header
+        const headerAgentName = response.headers.get('X-Agent-Name') || 'CodeGenerator';
+        setAgentName(headerAgentName);
+        setStreamPhase('routing');
+
         const reader = response.body?.getReader();
         if (!reader) throw new Error('No response body');
 
         const decoder = new TextDecoder();
         let fullContent = '';
+        let phaseSetToWriting = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -175,8 +182,13 @@ export function useChat(): UseChatReturn {
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
 
-          // Split stream: chat gets text, preview gets code
           const { chatText, codeText } = splitStreamContent(fullContent);
+
+          // Transition to writing phase when code starts flowing
+          if (codeText && !phaseSetToWriting) {
+            setStreamPhase('writing');
+            phaseSetToWriting = true;
+          }
 
           setStreamingContent(codeText);
 
@@ -190,7 +202,9 @@ export function useChat(): UseChatReturn {
           });
         }
 
-        // Parse and update HTML
+        // Stream complete
+        setStreamPhase('complete');
+
         const result = parseHtmlFence(fullContent);
         setLastParseResult(result);
 
@@ -200,8 +214,6 @@ export function useChat(): UseChatReturn {
           setCurrentHtml(newHtml);
         }
 
-        // Final message: store full raw content for persistence (includes code)
-        // but display only the chat text
         const { chatText: finalChatText } = splitStreamContent(fullContent);
         const finalMessages: ChatMessage[] = [...updatedMessages, {
           ...assistantMessage,
@@ -222,6 +234,7 @@ export function useChat(): UseChatReturn {
         setCurrentVersionIndex(updatedVersions.length - 1);
         await saveProject(projectId, finalMessages, newHtml, updatedVersions);
       } catch (error) {
+        setStreamPhase('idle');
         if ((error as Error).name === 'AbortError') {
           setMessages((prev) => {
             const updated = [...prev];
@@ -285,6 +298,7 @@ export function useChat(): UseChatReturn {
     setLastParseResult(null);
     setVersions(project.versions || []);
     setCurrentVersionIndex(project.versions ? project.versions.length - 1 : -1);
+    setStreamPhase('idle');
   }, []);
 
   const newChat = useCallback(() => {
@@ -296,6 +310,8 @@ export function useChat(): UseChatReturn {
     setLastParseResult(null);
     setVersions([]);
     setCurrentVersionIndex(-1);
+    setStreamPhase('idle');
+    setAgentName('');
   }, []);
 
   const restoreVersion = useCallback(
@@ -319,6 +335,8 @@ export function useChat(): UseChatReturn {
     refreshTrigger,
     versions,
     currentVersionIndex,
+    streamPhase,
+    agentName,
     sendMessage,
     stopGeneration,
     loadProject,

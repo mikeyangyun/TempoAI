@@ -31,9 +31,8 @@ export async function POST(request: NextRequest) {
       currentHtml: currentHtml || null,
     };
 
-    const { stream } = await orchestrator.execute(context);
+    const { stream, agentName } = await orchestrator.execute(context);
 
-    // Convert AsyncIterable to ReadableStream for the response
     const readableStream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
@@ -56,13 +55,13 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
         'Transfer-Encoding': 'chunked',
+        'X-Agent-Name': agentName || 'CodeGenerator',
       },
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Internal server error';
 
-    // Don't expose internal details for auth/config errors
     const safeMessage = message.includes('API key')
       ? 'Server configuration error. Please check your environment variables.'
       : message;

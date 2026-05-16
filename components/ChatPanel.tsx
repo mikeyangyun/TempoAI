@@ -7,6 +7,7 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { EmptyState } from '@/components/EmptyState';
 import { ChatMessage } from '@/types';
+import { StreamPhase } from '@/hooks/useChat';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -14,6 +15,9 @@ interface ChatPanelProps {
   onSend: (message: string) => void;
   onStop: () => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
+  streamPhase?: StreamPhase;
+  agentName?: string;
+  streamingLineCount?: number;
 }
 
 export function ChatPanel({
@@ -22,6 +26,9 @@ export function ChatPanel({
   onSend,
   onStop,
   inputRef,
+  streamPhase = 'idle',
+  agentName = '',
+  streamingLineCount = 0,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -50,17 +57,23 @@ export function ChatPanel({
           <EmptyState onSelectPrompt={onSend} />
         ) : (
           <div className="py-4">
-            {messages.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                isStreaming={
-                  isGenerating &&
-                  msg.role === 'assistant' &&
-                  msg.id === messages[messages.length - 1]?.id
-                }
-              />
-            ))}
+            {messages.map((msg) => {
+              const isLastAssistant =
+                isGenerating &&
+                msg.role === 'assistant' &&
+                msg.id === messages[messages.length - 1]?.id;
+
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isLastAssistant}
+                  streamPhase={isLastAssistant ? streamPhase : undefined}
+                  agentName={isLastAssistant ? agentName : undefined}
+                  streamingLineCount={isLastAssistant ? streamingLineCount : undefined}
+                />
+              );
+            })}
             <div ref={bottomRef} />
           </div>
         )}

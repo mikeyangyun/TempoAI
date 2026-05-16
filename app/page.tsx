@@ -29,6 +29,8 @@ export default function Home() {
     refreshTrigger,
     versions,
     currentVersionIndex,
+    streamPhase,
+    agentName,
     sendMessage,
     stopGeneration,
     loadProject,
@@ -63,6 +65,10 @@ export default function Home() {
 
   const projectTitle = messages.find((m) => m.role === 'user')?.content.slice(0, 50);
 
+  const streamingLineCount = streamingContent
+    ? streamingContent.split('\n').length
+    : 0;
+
   const chatPanel = (
     <ChatPanel
       messages={messages}
@@ -70,6 +76,9 @@ export default function Home() {
       onSend={handleSend}
       onStop={stopGeneration}
       inputRef={chatInputRef}
+      streamPhase={streamPhase}
+      agentName={agentName}
+      streamingLineCount={streamingLineCount}
     />
   );
 
