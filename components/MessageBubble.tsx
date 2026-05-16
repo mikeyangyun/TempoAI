@@ -272,10 +272,31 @@ function AssistantMessage({
         </div>
       ) : isSprintTeam ? (
         <>
-          {/* Show summary text for completed sprints */}
           {!isStreaming && message.content && (
-            <div className="ml-10 mt-2 text-sm leading-relaxed text-foreground/80">
-              <span className="whitespace-pre-wrap">{message.content}</span>
+            <div className="ml-10 mt-2 rounded-lg border border-border/50 bg-card/50 px-4 py-3">
+              <div className="text-[13px] leading-relaxed text-foreground/80">
+                {message.content.split('\n').map((line, i) => {
+                  if (!line.trim()) return <div key={i} className="h-2" />;
+                  if (line.startsWith('  • ')) {
+                    return (
+                      <div key={i} className="flex items-start gap-2 pl-2 py-0.5">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-violet-500/60" />
+                        <span className="text-foreground/70">{line.replace('  • ', '')}</span>
+                      </div>
+                    );
+                  }
+                  if (line === 'Features included:') {
+                    return <p key={i} className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mt-1 mb-0.5">{line}</p>;
+                  }
+                  if (i === 0) {
+                    return <p key={i} className="font-medium text-foreground">{line}</p>;
+                  }
+                  if (line.startsWith('You can continue')) {
+                    return <p key={i} className="text-[12px] text-muted-foreground/60 mt-1">{line}</p>;
+                  }
+                  return <p key={i}>{line}</p>;
+                })}
+              </div>
             </div>
           )}
         </>

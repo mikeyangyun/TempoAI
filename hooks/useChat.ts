@@ -455,26 +455,42 @@ export function useChat(): UseChatReturn {
           const sprintDone = fullContent.includes('[SPRINT:COMPLETE]');
 
           if (sprintDone) {
-            const roleNames: Record<string, string> = { ba: 'BA', tl: 'TL', uiux: 'UI/UX', dev: 'Dev', qa: 'QA' };
             const qaResult = segments.find(s => s.role === 'qa');
             const passed = qaResult?.content?.includes('[QA:PASS]');
-            const doneSegments = segments.filter(s => s.status === 'done');
-            const summaryLines = doneSegments.map(s => {
-              const firstLine = s.content.split('\n').find(l => l.trim() && !l.startsWith('#')) || 'Complete';
-              return `${roleNames[s.role] || s.role}: ${firstLine.trim()}`.slice(0, 150);
-            });
+            const sprintNum = (sprintContextRef.current?.sprintNumber || 0) + 1;
+
+            const baContent = segments.find(s => s.role === 'ba')?.content || '';
+            const devContent = segments.find(s => s.role === 'dev')?.content || '';
+
+            const whatBuilt = baContent
+              .split('\n')
+              .find(l => l.trim() && !l.startsWith('#') && !l.startsWith('-') && l.length > 10)
+              ?.trim() || 'Application';
+
+            const features = baContent
+              .split('\n')
+              .filter(l => /^[-*]\s/.test(l.trim()) || /^\d+\.\s/.test(l.trim()))
+              .slice(0, 5)
+              .map(l => l.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '').trim())
+              .filter(l => l.length > 3 && l.length < 100);
+
+            const devSummaryLine = devContent
+              .split('\n')
+              .find(l => l.trim() && !l.startsWith('#') && !l.startsWith('```') && l.length > 15)
+              ?.trim() || '';
+
             summaryContent = [
-              `**Sprint ${(sprintContextRef.current?.sprintNumber || 0) + 1} Complete**${passed ? ' — QA Passed' : ''}`,
+              `Sprint ${sprintNum} delivered${passed ? ' successfully' : ''}.`,
               '',
-              '**Delivered:**',
-              ...summaryLines.map(l => `- ${l}`),
+              devSummaryLine || whatBuilt,
               '',
-              '**Next steps:** You can request changes, add features, or start a new iteration.',
+              ...(features.length > 0 ? ['Features included:', ...features.map(f => `  • ${f}`), ''] : []),
+              'You can continue to iterate — request changes, add features, or refine the design.',
             ].join('\n');
 
             sprintContextRef.current = {
               roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
-              sprintNumber: (sprintContextRef.current?.sprintNumber || 0) + 1,
+              sprintNumber: sprintNum,
             };
           } else if (hasBaQuestion) {
             summaryContent = '';
