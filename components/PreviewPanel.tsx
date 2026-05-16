@@ -256,7 +256,7 @@ export function PreviewPanel({
         <div
           className={cn(
             'absolute inset-0 flex items-start justify-center overflow-auto transition-opacity duration-300',
-            viewMode === 'preview' && html && !isGenerating
+            viewMode === 'preview' && html
               ? 'opacity-100 z-10'
               : 'opacity-0 z-0 pointer-events-none'
           )}
@@ -277,8 +277,8 @@ export function PreviewPanel({
           </div>
         </div>
 
-        {/* Generation splash screen */}
-        {isGenerating && (
+        {/* Generation splash screen - only when no existing preview */}
+        {isGenerating && !html && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
             <div className="flex flex-col items-center gap-6 max-w-sm text-center px-8">
               {/* Animated rings */}
