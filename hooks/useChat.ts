@@ -305,8 +305,8 @@ export function useChat(): UseChatReturn {
           throw err;
         }
 
-        // Read agent name from response header
-        const headerAgentName = response.headers.get('X-Agent-Name') || 'CodeGenerator';
+        const effectiveMode = mode || 'build';
+        const headerAgentName = effectiveMode === 'plan' ? 'PlannerAgent' : 'SprintTeam';
         setAgentName(headerAgentName);
         setStreamPhase('routing');
 
