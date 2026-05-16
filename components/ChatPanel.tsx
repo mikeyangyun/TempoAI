@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, RefObject } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
+import { EmptyState } from '@/components/EmptyState';
 import { ChatMessage } from '@/types';
-import { Sparkles } from 'lucide-react';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   isGenerating: boolean;
   onSend: (message: string) => void;
   onStop: () => void;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
 export function ChatPanel({
@@ -19,6 +20,7 @@ export function ChatPanel({
   isGenerating,
   onSend,
   onStop,
+  inputRef,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -28,38 +30,26 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2 border-b px-4 py-3">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <h1 className="text-lg font-semibold">Tempo AI</h1>
-      </div>
-
-      {/* Messages */}
+      {/* Messages or Empty State */}
       <ScrollArea className="flex-1">
-        <div className="py-4">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center px-4 py-20 text-center text-muted-foreground">
-              <p className="text-sm">
-                Describe the app you want to build and watch it come to life.
-              </p>
-            </div>
-          ) : (
-            <>
-              {messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  isStreaming={
-                    isGenerating &&
-                    msg.role === 'assistant' &&
-                    msg.id === messages[messages.length - 1]?.id
-                  }
-                />
-              ))}
-            </>
-          )}
-          <div ref={bottomRef} />
-        </div>
+        {messages.length === 0 ? (
+          <EmptyState onSelectPrompt={onSend} />
+        ) : (
+          <div className="py-4">
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                isStreaming={
+                  isGenerating &&
+                  msg.role === 'assistant' &&
+                  msg.id === messages[messages.length - 1]?.id
+                }
+              />
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        )}
       </ScrollArea>
 
       {/* Input */}
@@ -67,6 +57,7 @@ export function ChatPanel({
         onSend={onSend}
         onStop={onStop}
         isGenerating={isGenerating}
+        inputRef={inputRef}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { ChatMessage, ParseResult, Project } from '@/types';
 import { parseHtmlFence } from '@/lib/parser';
 import { getStorage } from '@/lib/storage';
+import { useToast } from '@/components/Toast';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -33,6 +34,7 @@ export function useChat(): UseChatReturn {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const projectIdRef = useRef<string | null>(null);
+  const { showToast } = useToast();
 
   const saveProject = useCallback(
     async (
@@ -189,23 +191,24 @@ export function useChat(): UseChatReturn {
         } else {
           const errorMsg =
             error instanceof Error ? error.message : 'An error occurred';
+          showToast(errorMsg, 'error', {
+            label: 'Retry',
+            onClick: () => sendMessage(content),
+          });
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
               updated[lastIdx] = {
                 ...updated[lastIdx],
-                content: `[Error: ${errorMsg}]`,
+                content: `⚠️ ${errorMsg}`,
               };
             }
             return updated;
           });
         }
 
-        // Save even on error/abort so messages persist
-        const currentMsgs = messages;
         setMessages((prev) => {
-          // Schedule save after state update
           setTimeout(() => {
             if (projectId) {
               saveProject(projectId, prev, currentHtml);
@@ -218,7 +221,7 @@ export function useChat(): UseChatReturn {
         abortControllerRef.current = null;
       }
     },
-    [messages, isGenerating, currentHtml, saveProject]
+    [messages, isGenerating, currentHtml, saveProject, showToast]
   );
 
   const stopGeneration = useCallback(() => {

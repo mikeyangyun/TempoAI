@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, KeyboardEvent } from 'react';
+import { useRef, useCallback, useEffect, KeyboardEvent, RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Square } from 'lucide-react';
@@ -10,18 +10,25 @@ interface ChatInputProps {
   onStop?: () => void;
   isGenerating?: boolean;
   disabled?: boolean;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
-export function ChatInput({ onSend, onStop, isGenerating, disabled }: ChatInputProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+export function ChatInput({ onSend, onStop, isGenerating, disabled, inputRef }: ChatInputProps) {
+  const localRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (inputRef && localRef.current) {
+      (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = localRef.current;
+    }
+  });
 
   const handleSend = useCallback(() => {
-    const value = textareaRef.current?.value.trim();
+    const value = localRef.current?.value.trim();
     if (!value || isGenerating) return;
     onSend(value);
-    if (textareaRef.current) {
-      textareaRef.current.value = '';
-      textareaRef.current.style.height = 'auto';
+    if (localRef.current) {
+      localRef.current.value = '';
+      localRef.current.style.height = 'auto';
     }
   }, [onSend, isGenerating]);
 
@@ -36,7 +43,7 @@ export function ChatInput({ onSend, onStop, isGenerating, disabled }: ChatInputP
   );
 
   const handleInput = useCallback(() => {
-    const el = textareaRef.current;
+    const el = localRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
@@ -45,7 +52,7 @@ export function ChatInput({ onSend, onStop, isGenerating, disabled }: ChatInputP
   return (
     <div className="flex items-end gap-2 border-t bg-background p-4">
       <Textarea
-        ref={textareaRef}
+        ref={localRef}
         placeholder="Describe the app you want to build..."
         className="min-h-[44px] max-h-[200px] resize-none text-sm"
         rows={1}
