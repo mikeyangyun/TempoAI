@@ -47,10 +47,13 @@ export type LLMOptions = {
   signal?: AbortSignal;
 };
 
+export type ChatMode = 'plan' | 'build';
+
 export type AgentContext = {
   messages: ChatMessage[];
   currentHtml: string | null;
   options?: LLMOptions;
+  mode?: ChatMode;
 };
 
 export type AgentResult = {

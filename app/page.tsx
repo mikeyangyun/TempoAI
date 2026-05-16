@@ -14,6 +14,7 @@ import { HomePage } from '@/components/HomePage';
 import { useChat } from '@/hooks/useChat';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { ChatMode } from '@/types';
 
 const MODEL_BADGE = process.env.NEXT_PUBLIC_LLM_LABEL || 'AI';
 
@@ -41,12 +42,14 @@ export default function Home() {
   } = useChat();
 
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const [chatMode, setChatMode] = useState<ChatMode>('build');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       return sessionStorage.getItem('tempo_pending_prompt');
     }
     return null;
   });
+  const pendingModeRef = useRef<ChatMode>('build');
   const isMobile = useMediaQuery('(max-width: 768px)');
 
   const isHomePage = messages.length === 0 && !isGenerating && !activeProjectId;
@@ -63,27 +66,34 @@ export default function Home() {
   });
 
   const handleSend = useCallback(
-    (content: string) => {
+    (content: string, mode?: ChatMode) => {
+      const effectiveMode = mode || chatMode;
       if (!isSignedIn) {
         setPendingPrompt(content);
+        pendingModeRef.current = effectiveMode;
         sessionStorage.setItem('tempo_pending_prompt', content);
+        sessionStorage.setItem('tempo_pending_mode', effectiveMode);
         openSignIn();
         return;
       }
       setPendingPrompt(null);
       sessionStorage.removeItem('tempo_pending_prompt');
-      sendMessage(content);
+      sessionStorage.removeItem('tempo_pending_mode');
+      sendMessage(content, effectiveMode);
     },
-    [isSignedIn, openSignIn, sendMessage]
+    [isSignedIn, openSignIn, sendMessage, chatMode]
   );
 
-  // Auto-send pending prompt after login completes
   useEffect(() => {
     if (isSignedIn && pendingPrompt) {
       const prompt = pendingPrompt;
+      const mode = (typeof window !== 'undefined'
+        ? sessionStorage.getItem('tempo_pending_mode')
+        : null) as ChatMode | null;
       setPendingPrompt(null);
       sessionStorage.removeItem('tempo_pending_prompt');
-      sendMessage(prompt);
+      sessionStorage.removeItem('tempo_pending_mode');
+      sendMessage(prompt, mode || 'build');
     }
   }, [isSignedIn, pendingPrompt, sendMessage]);
 
@@ -103,6 +113,8 @@ export default function Home() {
       streamPhase={streamPhase}
       agentName={agentName}
       streamingLineCount={streamingLineCount}
+      chatMode={chatMode}
+      onModeChange={setChatMode}
     />
   );
 
@@ -123,7 +135,6 @@ export default function Home() {
       {/* Header */}
       <header className="relative flex h-12 items-center justify-between bg-background/80 backdrop-blur-sm px-4">
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
-        {/* Left: Brand + Project Title */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={newChat}
@@ -143,7 +154,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Right: Controls */}
         <div className="flex items-center gap-2">
           {!isHomePage && (
             <span className="hidden md:inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -155,7 +165,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main content */}
       {isHomePage ? (
         <HomePage onSend={handleSend} />
       ) : (

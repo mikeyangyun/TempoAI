@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Orchestrator } from '@/lib/agents/orchestrator';
-import { ChatMessage, AgentContext } from '@/types';
+import { ChatMessage, AgentContext, ChatMode } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, currentHtml } = body as {
+    const { messages, currentHtml, mode } = body as {
       messages: ChatMessage[];
       currentHtml?: string | null;
+      mode?: ChatMode;
     };
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     const context: AgentContext = {
       messages,
       currentHtml: currentHtml || null,
+      mode: mode || 'build',
     };
 
     const { stream, agentName } = await orchestrator.execute(context);

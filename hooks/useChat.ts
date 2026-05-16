@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChatMessage, ParseResult, Project, ProjectVersion, FileMap } from '@/types';
+import { ChatMessage, ParseResult, Project, ProjectVersion, FileMap, ChatMode } from '@/types';
 import { parseHtmlFence, parseMultiFileFence, isMultiFileFormat, mergeFilesToHtml } from '@/lib/parser';
 import { getStorage } from '@/lib/storage';
 import { useToast } from '@/components/Toast';
@@ -79,7 +79,7 @@ interface UseChatReturn {
   streamPhase: StreamPhase;
   agentName: string;
   fileMap: FileMap;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, mode?: ChatMode) => void;
   stopGeneration: () => void;
   loadProject: (id: string) => Promise<void>;
   newChat: () => void;
@@ -135,7 +135,7 @@ export function useChat(): UseChatReturn {
   );
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, mode?: ChatMode) => {
       if (!content.trim() || isGenerating) return;
 
       let projectId = projectIdRef.current;
@@ -180,6 +180,7 @@ export function useChat(): UseChatReturn {
           body: JSON.stringify({
             messages: updatedMessages,
             currentHtml,
+            mode: mode || 'build',
           }),
           signal: controller.signal,
         });

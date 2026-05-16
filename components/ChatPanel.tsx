@@ -6,18 +6,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { EmptyState } from '@/components/EmptyState';
-import { ChatMessage } from '@/types';
+import { ChatMessage, ChatMode } from '@/types';
 import { StreamPhase } from '@/hooks/useChat';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   isGenerating: boolean;
-  onSend: (message: string) => void;
+  onSend: (message: string, mode?: ChatMode) => void;
   onStop: () => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   streamPhase?: StreamPhase;
   agentName?: string;
   streamingLineCount?: number;
+  chatMode: ChatMode;
+  onModeChange: (mode: ChatMode) => void;
 }
 
 export function ChatPanel({
@@ -29,6 +31,8 @@ export function ChatPanel({
   streamPhase = 'idle',
   agentName = '',
   streamingLineCount = 0,
+  chatMode,
+  onModeChange,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -36,9 +40,13 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleImplementPlan = (planContent: string) => {
+    onModeChange('build');
+    onSend(planContent, 'build');
+  };
+
   return (
     <div className="flex h-full flex-col">
-      {/* Chat header - only show when there are messages */}
       {messages.length > 0 && (
         <div className="flex items-center justify-between border-b px-4 py-2">
           <div className="flex items-center gap-2">
@@ -51,7 +59,6 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Messages or Empty State */}
       <ScrollArea className="flex-1">
         {messages.length === 0 ? (
           <EmptyState onSelectPrompt={onSend} />
@@ -71,6 +78,7 @@ export function ChatPanel({
                   streamPhase={isLastAssistant ? streamPhase : undefined}
                   agentName={isLastAssistant ? agentName : undefined}
                   streamingLineCount={isLastAssistant ? streamingLineCount : undefined}
+                  onImplementPlan={handleImplementPlan}
                 />
               );
             })}
@@ -79,12 +87,13 @@ export function ChatPanel({
         )}
       </ScrollArea>
 
-      {/* Input */}
       <ChatInput
         onSend={onSend}
         onStop={onStop}
         isGenerating={isGenerating}
         inputRef={inputRef}
+        chatMode={chatMode}
+        onModeChange={onModeChange}
       />
     </div>
   );

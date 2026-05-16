@@ -5,13 +5,14 @@ import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/types';
 import { StreamPhase } from '@/hooks/useChat';
 import {
-  User,
   Check,
   ChevronUp,
   ChevronDown,
   Copy,
   MoreHorizontal,
   Sparkles,
+  Lightbulb,
+  Play,
 } from 'lucide-react';
 
 interface MessageBubbleProps {
@@ -20,6 +21,7 @@ interface MessageBubbleProps {
   streamPhase?: StreamPhase;
   agentName?: string;
   streamingLineCount?: number;
+  onImplementPlan?: (planContent: string) => void;
 }
 
 export function MessageBubble({
@@ -28,6 +30,7 @@ export function MessageBubble({
   streamPhase = 'idle',
   agentName = '',
   streamingLineCount = 0,
+  onImplementPlan,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
@@ -48,6 +51,7 @@ export function MessageBubble({
       streamPhase={streamPhase}
       agentName={agentName}
       streamingLineCount={streamingLineCount}
+      onImplementPlan={onImplementPlan}
     />
   );
 }
@@ -58,6 +62,7 @@ interface AssistantMessageProps {
   streamPhase: StreamPhase;
   agentName: string;
   streamingLineCount: number;
+  onImplementPlan?: (planContent: string) => void;
 }
 
 function AssistantMessage({
@@ -66,16 +71,18 @@ function AssistantMessage({
   streamPhase,
   agentName,
   streamingLineCount,
+  onImplementPlan,
 }: AssistantMessageProps) {
   const [stepsExpanded, setStepsExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const displayAgentName = agentName || (message.rawContent ? 'Tempo' : 'Tempo');
+  const isPlannerAgent = agentName === 'Planner' || agentName.toLowerCase().includes('plan');
+  const displayAgentName = agentName || 'Tempo';
   const agentRole = getAgentRole(agentName);
 
-  const stepCount = getStepCount(streamPhase, message);
-  const isComplete = !isStreaming && !!message.rawContent;
-  const showSteps = isStreaming || message.rawContent;
+  const stepCount = getStepCount(streamPhase, message, isPlannerAgent);
+  const isComplete = !isStreaming && (!!message.rawContent || !!message.content);
+  const showSteps = (isStreaming || message.rawContent) && !isPlannerAgent;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content || '');
@@ -83,19 +90,43 @@ function AssistantMessage({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleImplement = () => {
+    if (onImplementPlan && message.content) {
+      onImplementPlan(
+        `Implement the following plan:\n\n${message.content}`
+      );
+    }
+  };
+
   return (
     <div className="px-4 py-4">
       {/* Agent header */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/20 to-blue-500/20">
-          <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+        <div
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+            isPlannerAgent
+              ? 'bg-gradient-to-br from-blue-500/20 to-cyan-500/20'
+              : 'bg-gradient-to-br from-violet-500/20 to-blue-500/20'
+          )}
+        >
+          {isPlannerAgent ? (
+            <Lightbulb className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          ) : (
+            <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+          )}
         </div>
         <span className="text-sm font-semibold text-foreground">{displayAgentName}</span>
         <span className="text-muted-foreground/50">/</span>
         <span className="text-sm text-muted-foreground">{agentRole}</span>
+        {isPlannerAgent && (
+          <span className="ml-1 inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
+            Plan
+          </span>
+        )}
       </div>
 
-      {/* Collapsible process steps */}
+      {/* Collapsible process steps (Build mode only) */}
       {showSteps && (
         <div className="ml-10 mb-3">
           <button
@@ -134,26 +165,37 @@ function AssistantMessage({
         </div>
       )}
 
-      {/* AI's natural language response */}
-      {message.content && (
-        <div className="ml-10 text-sm leading-relaxed text-foreground/80">
-          <span className="whitespace-pre-wrap">{message.content}</span>
-          {isStreaming && <StreamingCursor />}
+      {/* Plan card or regular content */}
+      {isPlannerAgent && message.content ? (
+        <div className="ml-10">
+          <PlanCard
+            content={message.content}
+            isStreaming={!!isStreaming}
+            onImplement={handleImplement}
+            showImplement={!!onImplementPlan && !isStreaming}
+          />
         </div>
-      )}
+      ) : (
+        <>
+          {message.content && (
+            <div className="ml-10 text-sm leading-relaxed text-foreground/80">
+              <span className="whitespace-pre-wrap">{message.content}</span>
+              {isStreaming && <StreamingCursor />}
+            </div>
+          )}
 
-      {/* Waiting state */}
-      {!message.content && isStreaming && streamPhase === 'analyzing' && (
-        <div className="ml-10 text-sm text-muted-foreground">
-          <StreamingDots />
-        </div>
-      )}
+          {!message.content && isStreaming && streamPhase === 'analyzing' && (
+            <div className="ml-10 text-sm text-muted-foreground">
+              <StreamingDots />
+            </div>
+          )}
 
-      {/* Generated app card */}
-      {!isStreaming && message.rawContent && (
-        <div className="ml-10 mt-3">
-          <GeneratedAppCard />
-        </div>
+          {!isStreaming && message.rawContent && (
+            <div className="ml-10 mt-3">
+              <GeneratedAppCard />
+            </div>
+          )}
+        </>
       )}
 
       {/* Action bar */}
@@ -174,15 +216,61 @@ function AssistantMessage({
   );
 }
 
+interface PlanCardProps {
+  content: string;
+  isStreaming: boolean;
+  onImplement: () => void;
+  showImplement: boolean;
+}
+
+function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCardProps) {
+  return (
+    <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.03] dark:bg-blue-500/[0.06] overflow-hidden">
+      {/* Plan header */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-blue-500/10 bg-blue-500/[0.03]">
+        <Lightbulb className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Plan</span>
+        {isStreaming && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-[10px] text-blue-500/70">Thinking...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Plan content */}
+      <div className="px-4 py-3 text-sm leading-relaxed text-foreground/80">
+        <div className="whitespace-pre-wrap">{content}</div>
+        {isStreaming && <StreamingCursor />}
+      </div>
+
+      {/* Implement button */}
+      {showImplement && (
+        <div className="px-4 py-3 border-t border-blue-500/10 bg-blue-500/[0.02]">
+          <button
+            onClick={onImplement}
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-violet-500/15 hover:shadow-lg hover:shadow-violet-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Play className="h-3.5 w-3.5" />
+            Implement this plan
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getAgentRole(agentName: string): string {
   const name = agentName.toLowerCase();
+  if (name.includes('planner') || name.includes('plan')) return 'Architect';
   if (name.includes('modifier') || name.includes('modify')) return 'Code Modifier';
   if (name.includes('generator') || name.includes('generate')) return 'Code Generator';
   if (name.includes('orchestrator')) return 'Orchestrator';
   return 'Code Generator';
 }
 
-function getStepCount(phase: StreamPhase, message: ChatMessage): number {
+function getStepCount(phase: StreamPhase, message: ChatMessage, isPlan: boolean): number {
+  if (isPlan) return message.content ? 1 : 0;
   if (message.rawContent) return 3;
   switch (phase) {
     case 'complete': return 3;
