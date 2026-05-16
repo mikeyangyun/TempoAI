@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import { useAuth, useClerk } from '@clerk/nextjs';
 import { ResizablePanel } from '@/components/ResizablePanel';
 import { TempoLogo } from '@/components/TempoLogo';
@@ -41,7 +41,12 @@ export default function Home() {
   } = useChat();
 
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
-  const pendingPromptRef = useRef<string | null>(null);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('tempo_pending_prompt');
+    }
+    return null;
+  });
   const isMobile = useMediaQuery('(max-width: 768px)');
 
   const isHomePage = messages.length === 0 && !isGenerating && !activeProjectId;
@@ -60,24 +65,27 @@ export default function Home() {
   const handleSend = useCallback(
     (content: string) => {
       if (!isSignedIn) {
-        pendingPromptRef.current = content;
+        setPendingPrompt(content);
+        sessionStorage.setItem('tempo_pending_prompt', content);
         openSignIn();
         return;
       }
-      pendingPromptRef.current = null;
+      setPendingPrompt(null);
+      sessionStorage.removeItem('tempo_pending_prompt');
       sendMessage(content);
     },
     [isSignedIn, openSignIn, sendMessage]
   );
 
-  // Auto-send pending prompt after login
+  // Auto-send pending prompt after login completes
   useEffect(() => {
-    if (isSignedIn && pendingPromptRef.current) {
-      const prompt = pendingPromptRef.current;
-      pendingPromptRef.current = null;
+    if (isSignedIn && pendingPrompt) {
+      const prompt = pendingPrompt;
+      setPendingPrompt(null);
+      sessionStorage.removeItem('tempo_pending_prompt');
       sendMessage(prompt);
     }
-  }, [isSignedIn, sendMessage]);
+  }, [isSignedIn, pendingPrompt, sendMessage]);
 
   const projectTitle = messages.find((m) => m.role === 'user')?.content.slice(0, 50);
 
