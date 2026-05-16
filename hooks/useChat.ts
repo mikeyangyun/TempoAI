@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChatMessage, ParseResult, Project, ProjectVersion } from '@/types';
-import { parseHtmlFence } from '@/lib/parser';
+import { ChatMessage, ParseResult, Project, ProjectVersion, FileMap } from '@/types';
+import { parseHtmlFence, parseMultiFileFence, isMultiFileFormat, mergeFilesToHtml } from '@/lib/parser';
 import { getStorage } from '@/lib/storage';
 import { useToast } from '@/components/Toast';
 
@@ -12,10 +12,36 @@ function generateId(): string {
 
 export type StreamPhase = 'idle' | 'analyzing' | 'routing' | 'writing' | 'complete';
 
+/**
+ * Splits streaming content into chat text and code text.
+ * Supports both multi-file (```lang:filename) and legacy (```html) formats.
+ */
 function splitStreamContent(fullText: string): { chatText: string; codeText: string } {
-  const fenceOpenRegex = /```html\s*\n?/;
-  const fenceCloseRegex = /\n?```/;
+  // Multi-file format: extract all code blocks
+  const multiFileRegex = /```\w+:[^\n]+\n[\s\S]*?```/g;
+  const singleFileRegex = /```html\s*\n?[\s\S]*?(?:```|$)/;
 
+  if (isMultiFileFormat(fullText)) {
+    const codeBlocks = fullText.match(multiFileRegex) || [];
+    let chatText = fullText;
+    for (const block of codeBlocks) {
+      chatText = chatText.replace(block, '');
+    }
+    // Also remove unclosed blocks (still streaming)
+    const unclosedRegex = /```\w+:[^\n]+\n[\s\S]*$/;
+    const unclosedMatch = chatText.match(unclosedRegex);
+    let codeText = '';
+    if (unclosedMatch) {
+      chatText = chatText.replace(unclosedMatch[0], '');
+      codeText = unclosedMatch[0];
+    }
+    // Combine all code for the streaming display
+    const allCode = [...codeBlocks, codeText].filter(Boolean).join('\n\n');
+    return { chatText: chatText.trim(), codeText: allCode };
+  }
+
+  // Legacy single-file format
+  const fenceOpenRegex = /```html\s*\n?/;
   const openMatch = fullText.match(fenceOpenRegex);
 
   if (!openMatch || openMatch.index === undefined) {
@@ -26,6 +52,7 @@ function splitStreamContent(fullText: string): { chatText: string; codeText: str
   const afterOpenIndex = openMatch.index + openMatch[0].length;
   const contentAfterOpen = fullText.slice(afterOpenIndex);
 
+  const fenceCloseRegex = /\n?```/;
   const closeMatch = contentAfterOpen.match(fenceCloseRegex);
 
   if (!closeMatch || closeMatch.index === undefined) {
@@ -51,6 +78,7 @@ interface UseChatReturn {
   currentVersionIndex: number;
   streamPhase: StreamPhase;
   agentName: string;
+  fileMap: FileMap;
   sendMessage: (content: string) => void;
   stopGeneration: () => void;
   loadProject: (id: string) => Promise<void>;
@@ -70,6 +98,7 @@ export function useChat(): UseChatReturn {
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const [streamPhase, setStreamPhase] = useState<StreamPhase>('idle');
   const [agentName, setAgentName] = useState('');
+  const [fileMap, setFileMap] = useState<FileMap>({});
   const abortControllerRef = useRef<AbortController | null>(null);
   const projectIdRef = useRef<string | null>(null);
   const { showToast } = useToast();
@@ -192,6 +221,13 @@ export function useChat(): UseChatReturn {
 
           setStreamingContent(codeText);
 
+          if (isMultiFileFormat(fullContent)) {
+            const partialFiles = parseMultiFileFence(fullContent);
+            if (Object.keys(partialFiles).length > 0) {
+              setFileMap(partialFiles);
+            }
+          }
+
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
@@ -205,14 +241,29 @@ export function useChat(): UseChatReturn {
         // Stream complete
         setStreamPhase('complete');
 
-        const result = parseHtmlFence(fullContent);
-        setLastParseResult(result);
-
         let newHtml = currentHtml;
-        if (result.status === 'complete') {
-          newHtml = result.html;
-          setCurrentHtml(newHtml);
+        let result: ParseResult;
+
+        if (isMultiFileFormat(fullContent)) {
+          const files = parseMultiFileFence(fullContent);
+          setFileMap(files);
+          if (Object.keys(files).length > 0) {
+            newHtml = mergeFilesToHtml(files);
+            setCurrentHtml(newHtml);
+            result = { status: 'complete', html: newHtml, raw: fullContent };
+          } else {
+            result = { status: 'error', raw: fullContent };
+          }
+        } else {
+          result = parseHtmlFence(fullContent);
+          if (result.status === 'complete') {
+            newHtml = result.html;
+            setCurrentHtml(newHtml);
+          }
+          setFileMap({});
         }
+
+        setLastParseResult(result);
 
         const { chatText: finalChatText } = splitStreamContent(fullContent);
         const finalMessages: ChatMessage[] = [...updatedMessages, {
@@ -337,6 +388,7 @@ export function useChat(): UseChatReturn {
     currentVersionIndex,
     streamPhase,
     agentName,
+    fileMap,
     sendMessage,
     stopGeneration,
     loadProject,

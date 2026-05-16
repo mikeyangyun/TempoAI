@@ -33,6 +33,13 @@ export type ParseResult =
   | { status: 'streaming'; partial: string; raw: string }
   | { status: 'error'; raw: string };
 
+export type FileEntry = {
+  language: string;
+  content: string;
+};
+
+export type FileMap = Record<string, FileEntry>;
+
 export type LLMOptions = {
   model?: string;
   temperature?: number;

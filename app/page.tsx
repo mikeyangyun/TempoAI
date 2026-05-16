@@ -31,6 +31,7 @@ export default function Home() {
     currentVersionIndex,
     streamPhase,
     agentName,
+    fileMap,
     sendMessage,
     stopGeneration,
     loadProject,
@@ -90,6 +91,7 @@ export default function Home() {
       versions={versions}
       currentVersionIndex={currentVersionIndex}
       onRestoreVersion={restoreVersion}
+      fileMap={fileMap}
     />
   );
 
