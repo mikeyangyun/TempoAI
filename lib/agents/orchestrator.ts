@@ -1,0 +1,30 @@
+import { AgentContext, AgentResult } from '@/types';
+import { LLMProvider } from '@/lib/llm/types';
+import { OpenRouterProvider } from '@/lib/llm/openrouter';
+import { CodeGeneratorAgent } from './code-generator';
+import { CodeModifierAgent } from './code-modifier';
+import { BaseAgent } from './types';
+
+export class Orchestrator {
+  private llm: LLMProvider;
+  private codeGenerator: BaseAgent;
+  private codeModifier: BaseAgent;
+
+  constructor(llm?: LLMProvider) {
+    this.llm = llm || new OpenRouterProvider();
+    this.codeGenerator = new CodeGeneratorAgent(this.llm);
+    this.codeModifier = new CodeModifierAgent(this.llm);
+  }
+
+  async execute(context: AgentContext): Promise<AgentResult> {
+    const agent = this.selectAgent(context);
+    return agent.execute(context);
+  }
+
+  private selectAgent(context: AgentContext): BaseAgent {
+    if (context.currentHtml) {
+      return this.codeModifier;
+    }
+    return this.codeGenerator;
+  }
+}

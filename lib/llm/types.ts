@@ -1,8 +1,13 @@
-import { ChatMessage, LLMOptions } from '@/types';
+import { LLMOptions } from '@/types';
+
+export type LLMMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
 
 export interface LLMProvider {
   streamChat(
-    messages: ChatMessage[],
+    messages: LLMMessage[],
     options?: LLMOptions
   ): AsyncIterable<string>;
 }

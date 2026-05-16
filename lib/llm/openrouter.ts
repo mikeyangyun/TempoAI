@@ -1,0 +1,106 @@
+import { LLMOptions } from '@/types';
+import { LLMMessage, LLMProvider } from './types';
+
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_MODEL = 'openai/gpt-4o-mini';
+
+export class OpenRouterProvider implements LLMProvider {
+  private apiKey: string;
+  private defaultModel: string;
+
+  constructor() {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key) {
+      throw new Error(
+        'OPENROUTER_API_KEY is not set. Please add it to your .env.local file.'
+      );
+    }
+    this.apiKey = key;
+    this.defaultModel = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
+  }
+
+  async *streamChat(
+    messages: LLMMessage[],
+    options?: LLMOptions
+  ): AsyncIterable<string> {
+    const model = options?.model || this.defaultModel;
+    const signal = options?.signal;
+
+    const body = JSON.stringify({
+      model,
+      messages,
+      stream: true,
+      temperature: options?.temperature ?? 0.7,
+      ...(options?.maxTokens && { max_tokens: options.maxTokens }),
+    });
+
+    const response = await fetch(OPENROUTER_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+        'HTTP-Referer': 'https://tempo-ai.dev',
+        'X-Title': 'Tempo AI',
+      },
+      body,
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      const status = response.status;
+
+      if (status === 401) {
+        throw new Error('Invalid API key. Please check your OPENROUTER_API_KEY.');
+      }
+      if (status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+      }
+      if (status >= 500) {
+        throw new Error(`OpenRouter service error (${status}). Please try again later.`);
+      }
+      throw new Error(
+        `LLM request failed (${status}): ${errorBody.slice(0, 200)}`
+      );
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body received from LLM.');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') return;
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              yield content;
+            }
+          } catch {
+            // Skip malformed JSON chunks
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
