@@ -277,39 +277,44 @@ export function PreviewPanel({
           </div>
         </div>
 
-        {/* Streaming code preview */}
+        {/* Generation splash screen */}
         {isGenerating && (
-          <div className="absolute inset-0 z-10 flex flex-col">
-            <div className="flex items-center justify-between bg-card px-4 py-2 border-b">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-                <span className="text-xs font-medium text-foreground">
-                  {streamingContent ? 'Writing code...' : 'Thinking...'}
-                </span>
-              </div>
-              {lineCount > 0 && (
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  {lineCount} lines
-                </span>
-              )}
-            </div>
-            <ScrollArea className="flex-1 bg-card">
-              {streamingContent ? (
-                <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap text-foreground/80">
-                  <code>{streamingContent}</code>
-                  <span className="inline-block h-4 w-1.5 animate-pulse bg-primary ml-0.5" />
-                </pre>
-              ) : (
-                <div className="flex items-center justify-center h-32">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <div className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40" />
-                    <div className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40 [animation-delay:150ms]" />
-                    <div className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40 [animation-delay:300ms]" />
-                    <span className="ml-2 text-xs">Analyzing your request...</span>
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
+            <div className="flex flex-col items-center gap-6 max-w-sm text-center px-8">
+              {/* Animated rings */}
+              <div className="relative h-20 w-20">
+                <div className="absolute inset-0 rounded-full border-2 border-violet-500/20 animate-ping" />
+                <div className="absolute inset-2 rounded-full border-2 border-violet-500/30 animate-ping [animation-delay:300ms]" />
+                <div className="absolute inset-4 rounded-full border-2 border-violet-500/40 animate-ping [animation-delay:600ms]" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
+                    <Code className="h-5 w-5 text-white" />
                   </div>
                 </div>
-              )}
-            </ScrollArea>
+              </div>
+
+              {/* Status text */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-foreground">
+                  {streamingContent ? 'Building your app...' : 'Sprint team is working...'}
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {streamingContent
+                    ? `Writing code — ${lineCount} lines generated`
+                    : 'Analyzing requirements, designing architecture, crafting the perfect UI...'}
+                </p>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full animate-[progress_3s_ease-in-out_infinite]" />
+              </div>
+
+              {/* Branding */}
+              <p className="text-[10px] text-muted-foreground/40 font-medium tracking-wider uppercase">
+                Powered by Tempo AI
+              </p>
+            </div>
           </div>
         )}
 
