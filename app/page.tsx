@@ -54,7 +54,7 @@ export default function Home() {
   const pendingModeRef = useRef<ChatMode>('build');
   const isMobile = useMediaQuery('(max-width: 768px)');
 
-  const isHomePage = messages.length === 0 && !isGenerating && !activeProjectId;
+  const isHomePage = !isSignedIn && messages.length === 0 && !isGenerating && !activeProjectId;
 
   const focusInput = useCallback(() => {
     chatInputRef.current?.focus();
