@@ -186,7 +186,7 @@ Implementation follows the [**Execution Plan**](docs/EXECUTION_PLAN.md) — a st
 | Phase | Focus | Status |
 |-------|-------|--------|
 | 0 | Project scaffolding — Next.js + Tailwind + shadcn/ui + env | **Done** |
-| 1 | Core layout — split-pane Chat + Preview | Pending |
+| 1 | Core layout — split-pane Chat + Preview | **Done** |
 | 2 | LLM integration — OpenRouter streaming + HTML parser | Pending |
 | 3 | Chat interaction — frontend streaming + message UI | Pending |
 | 4 | Preview engine — iframe rendering + toolbar | Pending |

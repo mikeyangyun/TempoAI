@@ -1,15 +1,28 @@
+'use client';
+
+import { ResizablePanel } from '@/components/ResizablePanel';
+import { ChatPanel } from '@/components/ChatPanel';
+import { PreviewPanel } from '@/components/PreviewPanel';
+import { ThemeToggle } from '@/components/ThemeToggle';
+
 export default function Home() {
   return (
-    <div className="flex h-full items-center justify-center bg-background text-foreground">
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold tracking-tight">Tempo AI</h1>
-        <p className="text-muted-foreground text-lg">
-          Describe your app. Watch it come to life.
-        </p>
-        <p className="text-sm text-muted-foreground/60">
-          Phase 0 complete — scaffolding ready.
-        </p>
-      </div>
+    <div className="flex h-full flex-col">
+      {/* Top bar — minimal, just theme toggle */}
+      <header className="flex items-center justify-end border-b px-4 py-2">
+        <ThemeToggle />
+      </header>
+
+      {/* Main content — resizable split pane */}
+      <main className="flex-1 overflow-hidden">
+        <ResizablePanel
+          left={<ChatPanel />}
+          right={<PreviewPanel />}
+          defaultLeftWidth={38}
+          minLeftWidth={25}
+          maxLeftWidth={55}
+        />
+      </main>
     </div>
   );
 }
