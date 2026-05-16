@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/types';
-import { StreamPhase, TeamProgress, RoleSegment } from '@/hooks/useChat';
+import { StreamPhase, TeamProgress, RoleSegment, TeamPhaseInfo, parseRoleSegments } from '@/hooks/useChat';
 import {
   Check,
   ChevronRight,
@@ -107,7 +107,15 @@ function AssistantMessage({
   const displayAgentName = isSprintTeam ? 'Sprint Team' : (effectiveAgentName || 'Tempo');
   const agentRole = isSprintTeam ? 'Agile Development' : getAgentRole(effectiveAgentName);
 
-  const showTeamCards = isSprintTeam && teamProgress && teamProgress.roleSegments.length > 0;
+  const resolvedTeamProgress = useMemo(() => {
+    if (teamProgress && teamProgress.roleSegments.length > 0) return teamProgress;
+    if (isSprintTeam && message.sprintRaw) {
+      return rebuildTeamProgress(message.sprintRaw);
+    }
+    return null;
+  }, [teamProgress, isSprintTeam, message.sprintRaw]);
+
+  const showTeamCards = isSprintTeam && resolvedTeamProgress && resolvedTeamProgress.roleSegments.length > 0;
   const showLegacySteps = (isStreaming || message.rawContent) && !isPlannerAgent && !isSprintTeam;
 
   const handleCopy = () => {
@@ -160,36 +168,36 @@ function AssistantMessage({
       </div>
 
       {/* Sprint team: collapsible role cards */}
-      {showTeamCards && (
+      {showTeamCards && resolvedTeamProgress && (
         <div className="ml-10 mb-3 space-y-1.5">
-          {teamProgress.roleSegments.map((seg, idx) => (
+          {resolvedTeamProgress.roleSegments.map((seg, idx) => (
             <RoleCard
               key={`${seg.role}-${idx}`}
               segment={seg}
-              isActive={teamProgress.activeRole === seg.role && seg.status === 'active'}
+              isActive={resolvedTeamProgress.activeRole === seg.role && seg.status === 'active'}
             />
           ))}
 
           {/* BA Question Card */}
-          {teamProgress.baQuestions && teamProgress.baQuestions.length > 0 && !teamProgress.sprintComplete && (
+          {resolvedTeamProgress.baQuestions && resolvedTeamProgress.baQuestions.length > 0 && !resolvedTeamProgress.sprintComplete && (
             <QuestionCard
-              questions={teamProgress.baQuestions}
+              questions={resolvedTeamProgress.baQuestions}
               onAnswer={onAnswerBA}
               disabled={!!isStreaming}
             />
           )}
 
           {/* Waiting indicator when streaming but no segments yet for active role */}
-          {isStreaming && teamProgress.activeRole && !teamProgress.sprintComplete && (
+          {isStreaming && resolvedTeamProgress.activeRole && !resolvedTeamProgress.sprintComplete && (
             <div className="flex items-center gap-2 pl-1 pt-1">
               <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
               <span className="text-[11px] text-muted-foreground/60">
                 {(() => {
-                  const activeSeg = teamProgress.roleSegments.find(
-                    s => s.role === teamProgress.activeRole && s.status === 'active'
+                  const activeSeg = resolvedTeamProgress.roleSegments.find(
+                    s => s.role === resolvedTeamProgress.activeRole && s.status === 'active'
                   );
                   if (activeSeg && activeSeg.content) return null;
-                  const cfg = ROLE_CONFIG[teamProgress.activeRole!];
+                  const cfg = ROLE_CONFIG[resolvedTeamProgress.activeRole!];
                   return cfg ? `${cfg.label}...` : 'Working...';
                 })()}
               </span>
@@ -197,14 +205,14 @@ function AssistantMessage({
           )}
 
           {/* Sprint complete summary */}
-          {teamProgress.sprintComplete && (
-            <SprintSummaryCard roleSegments={teamProgress.roleSegments} />
+          {resolvedTeamProgress.sprintComplete && (
+            <SprintSummaryCard roleSegments={resolvedTeamProgress.roleSegments} />
           )}
         </div>
       )}
 
       {/* Sprint team: show "analyzing" when no segments yet */}
-      {isSprintTeam && isStreaming && (!teamProgress || teamProgress.roleSegments.length === 0) && (
+      {isSprintTeam && isStreaming && (!resolvedTeamProgress || resolvedTeamProgress.roleSegments.length === 0) && (
         <div className="ml-10 mb-3">
           <div className="flex items-center gap-2">
             <div className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
@@ -262,7 +270,16 @@ function AssistantMessage({
             showImplement={!!onImplementPlan && !isStreaming}
           />
         </div>
-      ) : !isSprintTeam ? (
+      ) : isSprintTeam ? (
+        <>
+          {/* Show summary text for completed sprints */}
+          {!isStreaming && message.content && (
+            <div className="ml-10 mt-2 text-sm leading-relaxed text-foreground/80">
+              <span className="whitespace-pre-wrap">{message.content}</span>
+            </div>
+          )}
+        </>
+      ) : (
         <>
           {message.content && (
             <div className="ml-10 text-sm leading-relaxed text-foreground/80">
@@ -283,7 +300,7 @@ function AssistantMessage({
             </div>
           )}
         </>
-      ) : null}
+      )}
 
       {/* Action bar */}
       {!isStreaming && message.content && !isSprintTeam && (
@@ -301,6 +318,33 @@ function AssistantMessage({
       )}
     </div>
   );
+}
+
+// --- Rebuild team progress from persisted sprintRaw ---
+
+function rebuildTeamProgress(sprintRaw: string): TeamProgress {
+  const markerRegex = /\[TEAM:(\w+):(\w+):([^:]+):([^\]]+)\]/g;
+  const phases: TeamPhaseInfo[] = [];
+  let m;
+  while ((m = markerRegex.exec(sprintRaw)) !== null) {
+    phases.push({
+      role: m[1] as TeamPhaseInfo['role'],
+      status: m[2] as TeamPhaseInfo['status'],
+      name: m[3],
+      title: m[4],
+    });
+  }
+
+  const roleSegments = parseRoleSegments(sprintRaw);
+  const sprintComplete = sprintRaw.includes('[SPRINT:COMPLETE]');
+
+  return {
+    phases,
+    activeRole: null,
+    baQuestions: null,
+    sprintComplete,
+    roleSegments,
+  };
 }
 
 // --- Collapsible Role Card ---

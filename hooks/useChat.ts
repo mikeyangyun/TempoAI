@@ -131,7 +131,7 @@ const INITIAL_TEAM_PROGRESS: TeamProgress = {
   roleSegments: [],
 };
 
-function parseRoleSegments(raw: string): RoleSegment[] {
+export function parseRoleSegments(raw: string): RoleSegment[] {
   const segments: RoleSegment[] = [];
   const markerRegex = /\[TEAM:(\w+):(\w+):([^:]+):([^\]]+)\]/g;
   const markers: { role: string; status: string; name: string; title: string; index: number }[] = [];
@@ -446,11 +446,31 @@ export function useChat(): UseChatReturn {
 
         const { chatText: finalChatText } = splitStreamContent(cleanedFinal);
         const currentAgentName = agentName || headerAgentName;
+        const isTeam = currentAgentName === 'SprintTeam';
+
+        let summaryContent = finalChatText;
+        if (isTeam) {
+          const segments = parseRoleSegments(fullContent);
+          const roleNames: Record<string, string> = { ba: 'BA', tl: 'TL', uiux: 'UI/UX', dev: 'Dev', qa: 'QA' };
+          const summaryLines = segments
+            .filter(s => s.status === 'done')
+            .map(s => `${roleNames[s.role] || s.role}: ${s.content.split('\n').filter(l => l.trim())[0] || 'Complete'}`.slice(0, 120));
+          const qaResult = segments.find(s => s.role === 'qa');
+          const passed = qaResult?.content?.includes('[QA:PASS]');
+          summaryContent = `Sprint complete${passed ? ' — QA passed' : ''}. ${summaryLines.length} roles contributed.\n\n${summaryLines.map(l => `- ${l}`).join('\n')}`;
+
+          sprintContextRef.current = {
+            roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
+            sprintNumber: (sprintContextRef.current?.sprintNumber || 0) + 1,
+          };
+        }
+
         const finalMessages: ChatMessage[] = [...updatedMessages, {
           ...assistantMessage,
-          content: finalChatText,
+          content: summaryContent,
           rawContent: cleanedFinal,
           agentName: currentAgentName,
+          sprintRaw: isTeam ? fullContent : undefined,
         }];
         setMessages(finalMessages);
 

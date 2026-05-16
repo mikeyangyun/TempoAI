@@ -5,6 +5,7 @@ export type ChatMessage = {
   timestamp: number;
   rawContent?: string;
   agentName?: string;
+  sprintRaw?: string;
 };
 
 export type ProjectVersion = {
