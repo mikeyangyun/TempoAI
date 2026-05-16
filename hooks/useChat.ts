@@ -451,18 +451,38 @@ export function useChat(): UseChatReturn {
         let summaryContent = finalChatText;
         if (isTeam) {
           const segments = parseRoleSegments(fullContent);
-          const roleNames: Record<string, string> = { ba: 'BA', tl: 'TL', uiux: 'UI/UX', dev: 'Dev', qa: 'QA' };
-          const summaryLines = segments
-            .filter(s => s.status === 'done')
-            .map(s => `${roleNames[s.role] || s.role}: ${s.content.split('\n').filter(l => l.trim())[0] || 'Complete'}`.slice(0, 120));
-          const qaResult = segments.find(s => s.role === 'qa');
-          const passed = qaResult?.content?.includes('[QA:PASS]');
-          summaryContent = `Sprint complete${passed ? ' — QA passed' : ''}. ${summaryLines.length} roles contributed.\n\n${summaryLines.map(l => `- ${l}`).join('\n')}`;
+          const hasBaQuestion = fullContent.includes('[TEAM:ba:question');
+          const sprintDone = fullContent.includes('[SPRINT:COMPLETE]');
 
-          sprintContextRef.current = {
-            roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
-            sprintNumber: (sprintContextRef.current?.sprintNumber || 0) + 1,
-          };
+          if (sprintDone) {
+            const roleNames: Record<string, string> = { ba: 'BA', tl: 'TL', uiux: 'UI/UX', dev: 'Dev', qa: 'QA' };
+            const qaResult = segments.find(s => s.role === 'qa');
+            const passed = qaResult?.content?.includes('[QA:PASS]');
+            const doneSegments = segments.filter(s => s.status === 'done');
+            const summaryLines = doneSegments.map(s => {
+              const firstLine = s.content.split('\n').find(l => l.trim() && !l.startsWith('#')) || 'Complete';
+              return `${roleNames[s.role] || s.role}: ${firstLine.trim()}`.slice(0, 150);
+            });
+            summaryContent = [
+              `**Sprint ${(sprintContextRef.current?.sprintNumber || 0) + 1} Complete**${passed ? ' — QA Passed' : ''}`,
+              '',
+              '**Delivered:**',
+              ...summaryLines.map(l => `- ${l}`),
+              '',
+              '**Next steps:** You can request changes, add features, or start a new iteration.',
+            ].join('\n');
+
+            sprintContextRef.current = {
+              roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
+              sprintNumber: (sprintContextRef.current?.sprintNumber || 0) + 1,
+            };
+          } else if (hasBaQuestion) {
+            summaryContent = '';
+            sprintContextRef.current = {
+              roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
+              sprintNumber: sprintContextRef.current?.sprintNumber || 1,
+            };
+          }
         }
 
         const finalMessages: ChatMessage[] = [...updatedMessages, {
@@ -536,7 +556,8 @@ export function useChat(): UseChatReturn {
   const answerBA = useCallback(
     (answer: string) => {
       if (!answer.trim()) return;
-      sendMessage(answer, 'build', answer);
+      const originalReq = originalRequestRef.current || answer;
+      sendMessage(originalReq, 'build', answer);
     },
     [sendMessage]
   );

@@ -338,10 +338,16 @@ function rebuildTeamProgress(sprintRaw: string): TeamProgress {
   const roleSegments = parseRoleSegments(sprintRaw);
   const sprintComplete = sprintRaw.includes('[SPRINT:COMPLETE]');
 
+  let baQuestions: string[] | null = null;
+  const qMatch = sprintRaw.match(/\[QUESTIONS\]([\s\S]*?)\[\/QUESTIONS\]/);
+  if (qMatch) {
+    baQuestions = qMatch[1].trim().split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+  }
+
   return {
     phases,
     activeRole: null,
-    baQuestions: null,
+    baQuestions,
     sprintComplete,
     roleSegments,
   };

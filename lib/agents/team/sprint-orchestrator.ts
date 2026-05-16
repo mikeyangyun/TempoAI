@@ -55,7 +55,7 @@ export class SprintOrchestrator {
 
     let baOutput = '';
 
-    if (baAnswer && sprintContext) {
+    if (baAnswer) {
       for await (const chunk of this.ba.continueWithAnswer(userRequest, baAnswer)) {
         baOutput += chunk;
         yield chunk;
