@@ -6,9 +6,10 @@ import { User, Bot } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  isStreaming?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
@@ -38,7 +39,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               : 'bg-muted text-foreground rounded-tl-sm'
           )}
         >
-          <MessageContent content={message.content} isUser={isUser} />
+          {!isUser && !message.content && isStreaming ? (
+            <StreamingIndicator />
+          ) : (
+            <MessageContent content={message.content} isUser={isUser} />
+          )}
+          {isStreaming && message.content && <StreamingCursor />}
         </div>
       </div>
     </div>
@@ -72,6 +78,22 @@ function MessageContent({ content, isUser }: { content: string; isUser: boolean 
         );
       })}
     </div>
+  );
+}
+
+function StreamingIndicator() {
+  return (
+    <div className="flex items-center gap-1 py-1">
+      <div className="h-2 w-2 animate-pulse rounded-full bg-current opacity-60" />
+      <div className="h-2 w-2 animate-pulse rounded-full bg-current opacity-60 [animation-delay:150ms]" />
+      <div className="h-2 w-2 animate-pulse rounded-full bg-current opacity-60 [animation-delay:300ms]" />
+    </div>
+  );
+}
+
+function StreamingCursor() {
+  return (
+    <span className="inline-block ml-0.5 h-4 w-0.5 animate-pulse bg-current opacity-70" />
   );
 }
 
