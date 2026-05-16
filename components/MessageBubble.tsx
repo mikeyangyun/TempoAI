@@ -580,6 +580,7 @@ interface PlanCardProps {
 
 function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCardProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [implemented, setImplemented] = useState(false);
   const lineCount = content.split('\n').filter(l => l.trim()).length;
 
   return (
@@ -623,11 +624,17 @@ function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCard
       {showImplement && (
         <div className="px-4 py-3 border-t border-blue-500/10 bg-gradient-to-r from-blue-500/[0.03] to-violet-500/[0.03]">
           <button
-            onClick={onImplement}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            onClick={() => { setImplemented(true); onImplement(); }}
+            disabled={implemented}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all',
+              implemented
+                ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
+                : 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 hover:scale-[1.02] active:scale-[0.98]'
+            )}
           >
             <Rocket className="h-4 w-4" />
-            Build this
+            {implemented ? 'Building...' : 'Build this'}
           </button>
         </div>
       )}
