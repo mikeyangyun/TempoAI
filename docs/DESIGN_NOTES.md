@@ -20,7 +20,7 @@
 | **localStorage + IndexedDB** | Split: metadata in localStorage, large HTML in IndexedDB | No cloud sync, no multi-device | Zero external dependencies; instant setup; sufficient for demo. Storage layer is abstracted — adding Supabase/PostgreSQL would only require a new adapter. |
 | **iframe sandbox** | `srcDoc` injection with configurable sandbox attributes | Not production-grade isolation (no separate origin) | Good enough for local demo; declared clearly in README. The `PreviewEngine` abstraction allows migrating to a containerized sandbox (Docker/Firecracker) or WebContainers. |
 | **OpenRouter as LLM gateway** | Single OpenAI-compatible endpoint; model switchable via env var | Depends on third-party routing | Avoids vendor lock-in; can swap to direct OpenAI, Anthropic, or self-hosted model with a one-line env change. |
-| **Streaming with fenced code contract** | System prompt enforces ` ```html ``` ` output; parser extracts only that block | Model occasionally breaks contract | Robust fallback: raw output shown + "copy" button. Retry available. Streaming injects only after fence closes — no half-rendered previews. |
+| **Streaming with fenced code contract** | System prompt enforces ` ```html ``` ` output; parser extracts only that block | Model occasionally breaks contract | Robust fallback: raw output shown + error toast with retry. Streaming shows code as it generates — no half-rendered previews. |
 
 ### What We Deliberately Did NOT Build (and Why)
 
@@ -29,35 +29,52 @@
 | User authentication / multi-tenancy | Not needed for a single-user prototype demo; adds significant complexity with no evaluation benefit |
 | Docker/Firecracker sandboxing | Requires infra setup that cannot be reliably demoed in a portable `pnpm dev` scenario |
 | Real-time multi-user collaboration | Out of scope for solo prototype; WebSocket infra is non-trivial |
-| Deployment pipeline (custom domains) | Replaced by lightweight "share via URL hash" which demonstrates the concept without infra |
+| Deployment pipeline (custom domains) | Replaced by lightweight download functionality which demonstrates the concept without infra |
 | Full CI/CD | Prototype-grade; manual verification per phase |
+| Monaco Editor | Would add ~2MB bundle; plain `<pre>` code view with syntax sufficient for demo; architecture allows drop-in upgrade |
 
 ---
 
 ## 2. Current Completion Status
 
-> This section will be updated as each phase is completed.
-
 | Phase | Scope | Status | Notes |
 |-------|-------|--------|-------|
-| 0 | Project scaffolding | Pending | — |
-| 1 | Core layout (split-pane) | Pending | — |
-| 2 | LLM integration (streaming) | Pending | — |
-| 3 | Chat interaction (frontend) | Pending | — |
-| 4 | Preview engine (iframe) | Pending | — |
-| 5 | Persistence (storage) | Pending | — |
-| 6 | UX polish + Monaco editor | Pending | — |
-| 7 | Iterative modification + versions | Pending | — |
-| 8 | Final documentation | Pending | — |
-| 9 | Buffer enhancements | Pending | — |
+| 0 | Project scaffolding | **Done** | Next.js 16 + Tailwind 4 + shadcn/ui v4 + env setup |
+| 1 | Core layout (split-pane) | **Done** | Custom ResizablePanel with drag handle |
+| 2 | LLM integration (streaming) | **Done** | OpenRouter provider + HTML fence parser |
+| 3 | Chat interaction (frontend) | **Done** | Streaming display, auto-scroll, stop control |
+| 4 | Preview engine (iframe) | **Done** | iframe srcDoc + toolbar (reload, new tab, download) |
+| 5 | Persistence (storage) | **Done** | localStorage + IndexedDB facade + sidebar |
+| 6 | UX polish | **Done** | Empty state, toasts, shortcuts, responsive, dark mode |
+| 7 | Iterative modification + versions | **Done** | CodeModifier agent + VersionTimeline with restore |
+| 8 | Final documentation | **Done** | README, DESIGN_NOTES, code cleanup |
+| 9 | Buffer enhancements | Pending | Monaco, share link, model selector |
 
-### What Works (after completion)
+### What Works
 
-_To be filled per phase._
+The complete user workflow:
+
+1. **Fresh start**: Open app → see prompt suggestion cards → click one or type custom prompt
+2. **Generation**: AI streams code token-by-token → live code preview visible during generation
+3. **Preview**: Generation completes → interactive app renders in sandboxed iframe
+4. **Iteration**: Send follow-up message → Orchestrator routes to CodeModifier → app updates
+5. **Versioning**: Each generation creates a snapshot → dropdown shows all versions → click to restore
+6. **Persistence**: Refresh page → all projects, messages, and versions survive
+7. **Multi-project**: Sidebar shows project history → switch between projects → start new chat (⌘K)
+8. **Error recovery**: Network failure → toast with "Retry" button → click to resend
+9. **Responsive**: Desktop: split-pane + sidebar | Mobile: tabbed layout
+10. **Theme**: Dark/light mode with full coverage via CSS variables
 
 ### Known Limitations
 
-_To be filled during development._
+| Limitation | Impact | Workaround |
+|-----------|--------|-----------|
+| Single-file HTML only | No multi-file React/Vue apps | CDN libraries via `<script>` tags work fine |
+| No npm packages | Limited to CDN-available libs | System prompt includes Tailwind CSS CDN by default |
+| Model quality varies | Less capable models produce worse output | Switch to `gpt-4o` or `claude-3.5-sonnet` via env var |
+| localStorage size limits | ~5-10MB browser limit | Large projects auto-overflow to IndexedDB |
+| No deployment | Apps only run locally | Download HTML button available |
+| No undo for version restore | Restoring replaces current view | All versions preserved in timeline |
 
 ---
 
@@ -138,12 +155,12 @@ The codebase is structured around **interface boundaries** that enable upgrading
 ```typescript
 // Any LLM provider must implement this
 interface LLMProvider {
-  streamChat(messages: ChatMessage[], options?: LLMOptions): AsyncIterable<string>;
+  streamChat(messages: LLMMessage[], options?: LLMOptions): AsyncIterable<string>;
 }
 
 // Any agent must implement this
 interface BaseAgent {
-  name: string;
+  readonly name: string;
   execute(context: AgentContext): Promise<AgentResult>;
 }
 
@@ -151,13 +168,14 @@ interface BaseAgent {
 interface PreviewEngine {
   inject(html: string): void;
   reload(): void;
+  openInNewTab(): void;
   getScreenshot?(): Promise<Blob>;
 }
 
 // Storage can be upgraded without touching UI
 interface StorageAdapter {
   listProjects(): Promise<ProjectMeta[]>;
-  getProject(id: string): Promise<Project>;
+  getProject(id: string): Promise<Project | null>;
   saveProject(project: Project): Promise<void>;
   deleteProject(id: string): Promise<void>;
 }

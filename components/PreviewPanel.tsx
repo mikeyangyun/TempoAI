@@ -36,21 +36,27 @@ export function PreviewPanel({
   onRestoreVersion,
 }: PreviewPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
+  const [prevHtml, setPrevHtml] = useState<string | null | undefined>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const engineRef = useRef<IframePreviewEngine>(new IframePreviewEngine());
 
-  // Bind iframe to engine when mounted
+  // Derived state: auto-switch to preview when new HTML arrives
+  if (html && html !== prevHtml) {
+    setPrevHtml(html);
+    if (viewMode !== 'preview') {
+      setViewMode('preview');
+    }
+  }
+
   useEffect(() => {
     if (iframeRef.current) {
       engineRef.current.bind(iframeRef.current);
     }
   }, []);
 
-  // Inject HTML when it changes
   useEffect(() => {
     if (html) {
       engineRef.current.inject(html);
-      setViewMode('preview');
     }
   }, [html]);
 

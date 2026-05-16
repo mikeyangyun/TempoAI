@@ -2,13 +2,63 @@
 
 An AI-powered application generator that turns natural language into live, interactive web applications — inspired by [v0.dev](https://v0.dev) and [bolt.new](https://bolt.new).
 
-> **Status**: Pre-development — architecture and project plan finalized, implementation starting from Phase 0.
+> **Status**: Prototype complete — all core phases (0–8) implemented and verified.
 
 ---
 
 ## Vision
 
 Describe what you want in plain English. Tempo AI generates a fully functional web page and renders it in a live preview you can click, type into, and interact with — all in real time. Then keep talking to refine it: _"make the button red"_, _"add a dark mode toggle"_, _"put a navbar on top"_.
+
+---
+
+## Quick Start
+
+```bash
+# Prerequisites: Node.js >= 18, pnpm >= 9
+
+# 1. Clone and install
+git clone <repo-url>
+cd TempoAI
+pnpm install
+
+# 2. Configure environment
+cp .env.example .env.local
+# Edit .env.local — add your OpenRouter API key
+
+# 3. Run development server
+pnpm dev
+# Open http://localhost:3000
+
+# 4. Build for production
+pnpm build && pnpm start
+```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENROUTER_API_KEY` | Yes | Your [OpenRouter](https://openrouter.ai/) API key |
+| `OPENROUTER_MODEL` | No | Model identifier (default: `openai/gpt-4o-mini`) |
+
+---
+
+## Core Features
+
+### Implemented
+
+- **Natural Language → Live App**: Describe your app in plain English, get a working interactive web page
+- **Real-Time Streaming**: Token-by-token generation with live code preview during generation
+- **Interactive Preview**: Sandboxed iframe with full interactivity (clicks, forms, scripts)
+- **Iterative Refinement**: Keep chatting to modify the app — "add dark mode", "make the header sticky"
+- **Version History**: Every generation creates a version snapshot; browse and restore any past version
+- **Project Persistence**: Projects, conversations, and code survive page refresh (localStorage + IndexedDB)
+- **Dark/Light Theme**: System-aware with manual toggle via header button
+- **Prompt Suggestions**: Empty state shows 6 ready-to-use prompt cards for quick start
+- **Keyboard Shortcuts**: `⌘K` (new chat), `Esc` (stop generation), `/` (focus input)
+- **Responsive Layout**: Desktop split-pane; mobile tab-based interface
+- **Error Handling**: Toast notifications with retry action; graceful error display
+- **Download**: Export generated HTML as a downloadable file
 
 ---
 
@@ -27,7 +77,7 @@ Describe what you want in plain English. Tempo AI generates a fully functional w
 │  │ • Stop/Send  │  html    │ │  (sandboxed, swappable)   │ ││
 │  │              │          │ └───────────────────────────┘ ││
 │  └──────┬───────┘          │ Toolbar: Reload │ New Tab     ││
-│         │                  │          Code (Monaco) / View  ││
+│         │                  │  Version History │ Download    ││
 │         │ POST /api/chat   └───────────────────────────────┘│
 └─────────┼───────────────────────────────────────────────────┘
           │
@@ -46,14 +96,8 @@ Describe what you want in plain English. Tempo AI generates a fully functional w
 │         └─────────────────────────────────────────────┘     │
 │                                                              │
 │  • API Key server-side only (never in browser bundle)        │
-│  • Streams SSE tokens back to browser                        │
+│  • Streams tokens back to browser via chunked response       │
 │  • System prompt enforces ```html``` fenced output           │
-└─────────┬────────────────────────────────────────────────────┘
-          │
-┌─────────▼───────────────────────────────────────────────────┐
-│                  LLM Gateway (OpenRouter)                     │
-│  • Model configurable via OPENROUTER_MODEL env var           │
-│  • Streaming chat completions (OpenAI-compatible protocol)   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,13 +105,13 @@ Describe what you want in plain English. Tempo AI generates a fully functional w
 
 | Decision | Rationale |
 |----------|-----------|
-| **Agent Orchestration layer** | Even with a single model, code is structured as `Orchestrator → Agent` pipeline. Adding new agents (Planner, Reviewer, Deployer) requires only a new file — no rewiring. |
-| **Interface-driven extensibility** | Core layers (`LLMProvider`, `PreviewEngine`, `StorageAdapter`, `BaseAgent`) are defined as interfaces. Current impls are simple; upgrading any layer is a swap, not a rewrite. |
+| **Agent Orchestration layer** | Code is structured as `Orchestrator → Agent` pipeline. Adding new agents (Planner, Reviewer, Deployer) requires only a new file. |
+| **Interface-driven extensibility** | Core layers (`LLMProvider`, `PreviewEngine`, `StorageAdapter`, `BaseAgent`) are defined as interfaces. Upgrading any layer is a swap, not a rewrite. |
 | **Single-file HTML generation** | Lowest integration cost; reliable parsing; real interactivity in iframe. The `PreviewEngine` interface allows future swap to Sandpack or WebContainers. |
 | **Server-side LLM calls only** | API keys never reach the browser. The Next.js Route Handler acts as a secure proxy. |
-| **Fenced code contract** | The system prompt instructs the model to output exactly one ` ```html ``` ` block. The parser only extracts that fence; failures surface a user-friendly error + "copy raw output" fallback. |
-| **iframe with sandbox** | Generated HTML is treated as untrusted code. `sandbox` attributes are configured to allow scripts/forms for interactivity while acknowledging this is a local/demo-grade trust boundary (see [Security](#security)). |
-| **localStorage + IndexedDB** | Project metadata in localStorage; large HTML payloads in IndexedDB. The `StorageAdapter` interface allows upgrading to Supabase/PostgreSQL without touching UI code. |
+| **Fenced code contract** | The system prompt instructs the model to output exactly one ` ```html ``` ` block. The parser extracts that fence; failures surface a user-friendly error. |
+| **iframe with sandbox** | Generated HTML is treated as untrusted code. `sandbox` attributes allow scripts/forms while isolating the origin. |
+| **localStorage + IndexedDB** | Project metadata in localStorage; large HTML payloads in IndexedDB. The `StorageAdapter` interface allows upgrading to any backend. |
 
 ---
 
@@ -75,10 +119,10 @@ Describe what you want in plain English. Tempo AI generates a fully functional w
 
 | Layer | Technology |
 |-------|------------|
-| Framework | [Next.js 15](https://nextjs.org/) (App Router) |
+| Framework | [Next.js 16](https://nextjs.org/) (App Router, Turbopack) |
 | Language | TypeScript (strict) |
 | Styling | [Tailwind CSS 4](https://tailwindcss.com/) |
-| Components | [shadcn/ui](https://ui.shadcn.com/) |
+| Components | [shadcn/ui](https://ui.shadcn.com/) (v4, base-ui) |
 | LLM Gateway | [OpenRouter](https://openrouter.ai/) (OpenAI-compatible) |
 | Preview | `<iframe srcDoc>` with configurable `sandbox` |
 | Persistence | localStorage + IndexedDB |
@@ -88,100 +132,65 @@ Describe what you want in plain English. Tempo AI generates a fully functional w
 
 ## Project Structure
 
-> Will be populated as each phase is implemented. Target layout:
-
 ```
 TempoAI/
 ├── app/
-│   ├── page.tsx                 # Main page — split-pane layout
-│   ├── layout.tsx               # Root layout, theme provider
-│   ├── globals.css              # Tailwind base styles
-│   └── api/
-│       └── chat/
-│           └── route.ts         # POST — streaming LLM proxy via Orchestrator
+│   ├── page.tsx                 # Main page — responsive split-pane layout
+│   ├── layout.tsx               # Root layout, theme + toast providers
+│   ├── globals.css              # Tailwind + shadcn CSS variables (light/dark)
+│   └── api/chat/route.ts        # POST — streaming LLM proxy via Orchestrator
 ├── components/
-│   ├── ChatPanel.tsx            # Message list + input
+│   ├── ChatPanel.tsx            # Message list + empty state + input
 │   ├── ChatInput.tsx            # Textarea, send/stop controls
-│   ├── MessageBubble.tsx        # Single message rendering
-│   ├── PreviewPanel.tsx         # Preview engine wrapper (iframe)
-│   ├── CodeEditor.tsx           # Monaco-based code view
+│   ├── MessageBubble.tsx        # Single message rendering + streaming
+│   ├── PreviewPanel.tsx         # Preview engine wrapper (iframe + code view)
+│   ├── EmptyState.tsx           # Prompt suggestion cards
 │   ├── Sidebar.tsx              # Project list / history
-│   ├── VersionTimeline.tsx      # Version snapshot browser
+│   ├── VersionTimeline.tsx      # Version snapshot browser + restore
+│   ├── MobileLayout.tsx         # Tab-based layout for mobile
+│   ├── ResizablePanel.tsx       # Draggable split-pane
+│   ├── Toast.tsx                # Toast notification system
+│   ├── ThemeProvider.tsx        # next-themes wrapper
+│   ├── ThemeToggle.tsx          # Dark/light toggle button
 │   └── ui/                      # shadcn/ui primitives
 ├── hooks/
-│   └── useChat.ts               # Streaming fetch + message state
+│   ├── useChat.ts               # Chat state, streaming, versions, persistence
+│   ├── useKeyboardShortcuts.ts  # Global keyboard shortcuts
+│   └── useMediaQuery.ts         # Responsive breakpoint detection
 ├── lib/
 │   ├── agents/
-│   │   ├── types.ts             # BaseAgent, AgentContext, AgentResult
-│   │   ├── orchestrator.ts      # Routes requests to appropriate agent
+│   │   ├── types.ts             # BaseAgent interface
+│   │   ├── orchestrator.ts      # Routes to CodeGenerator or CodeModifier
 │   │   ├── code-generator.ts    # Generates HTML from natural language
 │   │   └── code-modifier.ts     # Iteratively modifies existing HTML
 │   ├── llm/
 │   │   ├── types.ts             # LLMProvider interface
-│   │   ├── openrouter.ts        # OpenRouter implementation
+│   │   ├── openrouter.ts        # OpenRouter streaming implementation
 │   │   └── prompts.ts           # System prompt definitions
 │   ├── preview/
 │   │   ├── types.ts             # PreviewEngine interface
 │   │   └── iframe-engine.ts     # iframe srcDoc implementation
 │   ├── storage/
 │   │   ├── types.ts             # StorageAdapter interface
-│   │   ├── local-storage.ts     # localStorage implementation
-│   │   └── indexed-db.ts        # IndexedDB for large payloads
-│   ├── parser.ts                # HTML fence extractor
-│   └── utils.ts                 # Shared helpers
-├── types/
-│   └── index.ts                 # Shared TypeScript types
+│   │   ├── local-storage.ts     # localStorage for metadata
+│   │   ├── indexed-db.ts        # IndexedDB for large HTML payloads
+│   │   └── index.ts             # StorageFacade combining both
+│   ├── parser.ts                # HTML fence extractor (streaming + complete)
+│   └── utils.ts                 # cn() helper
+├── types/index.ts               # Shared TypeScript types
 ├── docs/
-│   ├── PROTOTYPE_BLUEPRINT.md   # Single source of truth for scope
+│   ├── PROTOTYPE_BLUEPRINT.md   # Scope and requirements
 │   ├── DESIGN_NOTES.md          # Trade-offs, status, future roadmap
-│   └── agile-team/              # Agile micro-team role guides
-├── .cursor/
-│   ├── rules/                   # Cursor agent behavior rules
-│   └── skills/                  # Cursor agent skills
+│   └── EXECUTION_PLAN.md        # Step-by-step development guide
 ├── .env.example                 # Required env vars (no secrets)
-├── .env.local                   # Local secrets (git-ignored)
 ├── package.json
 ├── tsconfig.json
-├── next.config.ts
-├── tailwind.config.ts
-└── README.md
+└── next.config.ts
 ```
-
----
-
-## Quick Start
-
-> Detailed steps will be added once Phase 0 scaffolding is complete.
-
-```bash
-# Prerequisites: Node.js >= 18, pnpm >= 9
-
-# 1. Clone and install
-git clone <repo-url>
-cd TempoAI
-pnpm install
-
-# 2. Configure environment
-cp .env.example .env.local
-# Edit .env.local — add your OpenRouter API key
-
-# 3. Run
-pnpm dev
-# Open http://localhost:3000
-```
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENROUTER_API_KEY` | Yes | Your [OpenRouter](https://openrouter.ai/) API key |
-| `OPENROUTER_MODEL` | No | Model identifier (default: `openai/gpt-4o-mini`) |
 
 ---
 
 ## Development Phases
-
-Implementation follows the [**Execution Plan**](docs/EXECUTION_PLAN.md) — a step-by-step document with tasks, file lists, and verification checklists for each phase. Each phase produces a testable deliverable; documentation is updated incrementally.
 
 | Phase | Focus | Status |
 |-------|-------|--------|
@@ -193,26 +202,20 @@ Implementation follows the [**Execution Plan**](docs/EXECUTION_PLAN.md) — a st
 | 5 | Persistence — localStorage + IndexedDB + project history | **Done** |
 | 6 | UX polish — empty states, loading, errors, shortcuts | **Done** |
 | 7 | Innovation — iterative modification + version snapshots | **Done** |
-| 8 | Documentation & delivery — final README, .env.example, cleanup | Pending |
+| 8 | Documentation & delivery — final README, .env.example, cleanup | **Done** |
 | 9 | Buffer enhancements — prompt templates, Monaco, sharing, export | Pending |
 
 ---
 
-## Core Features
+## Demo Workflow
 
-### Implemented
-
-_None yet — development starting from Phase 0._
-
-### Planned
-
-- **Natural language to live app**: Describe → Generate → Interact
-- **Streaming generation**: Token-by-token AI response with stop control
-- **Live preview**: Real, interactive iframe rendering (not a screenshot)
-- **Iterative refinement**: Keep chatting to modify the generated app
-- **Version history**: Snapshot every generation; browse and restore past versions
-- **Project persistence**: Conversations and generated code survive page refresh
-- **Dark/Light theme**: System-aware with manual toggle
+1. Open `http://localhost:3000` — you'll see prompt suggestion cards
+2. Click **"Todo App"** or type your own description
+3. Watch the AI stream code in real time (code view visible in the preview panel)
+4. When generation completes, the live interactive app appears in the preview iframe
+5. Type a follow-up: _"add a dark mode toggle"_ — the app updates iteratively
+6. Click the version dropdown (`v1/2`) in the preview toolbar to restore any past version
+7. Start a new chat with `⌘K`, or browse project history in the sidebar
 
 ---
 
@@ -252,19 +255,18 @@ This is a **prototype / local demo**. Generated HTML is executed inside a sandbo
 
 ---
 
-## Agile Workflow
+## Known Limitations
 
-Development follows a lightweight agile micro-team model documented in [`docs/agile-team/`](docs/agile-team/). For each feature:
-
-**BA** (scope & acceptance) → **UX** (interaction & states) → **TL** (tech slices) → **Dev** (implementation) → **QA** (verification)
-
-See the [agile team README](docs/agile-team/README.md) for details.
+- **Single-file HTML only**: Generated apps are self-contained HTML documents; multi-file React/Vue projects are not supported
+- **No npm packages in generated code**: Apps can use CDN-linked libraries (included via `<script>` tags in generated HTML) but not `import` statements
+- **No real-time collaboration**: Single-user, local-only persistence
+- **Model-dependent quality**: Output quality depends on the chosen LLM model; `gpt-4o-mini` is fast but less capable than `gpt-4o` or `claude-3.5-sonnet`
+- **No deployment**: Generated apps run locally in iframe; no one-click deploy to hosting
+- **localStorage limits**: Browser storage limits apply (~5-10MB); very large projects may need manual cleanup
 
 ---
 
 ## Architecture Evolution
-
-This prototype is scoped to a local single-user demo, but the architecture is designed to evolve toward a production platform:
 
 | Current (Prototype) | Future (Production) |
 |---------------------|---------------------|
@@ -276,12 +278,6 @@ This prototype is scoped to a local single-user demo, but the architecture is de
 | Single model via OpenRouter | Model comparison, A/B testing, fine-tuned models |
 
 For detailed reasoning, trade-offs, and a prioritized extension roadmap, see **[`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md)**.
-
----
-
-## Blueprint & Governance
-
-The single source of truth for scope, tech choices, and trade-offs is [`docs/PROTOTYPE_BLUEPRINT.md`](docs/PROTOTYPE_BLUEPRINT.md). Any deviation from the blueprint must be recorded either in the blueprint's revision table or in this README under a "Deviations" section.
 
 ---
 

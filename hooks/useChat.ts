@@ -198,10 +198,7 @@ export function useChat(): UseChatReturn {
         } else {
           const errorMsg =
             error instanceof Error ? error.message : 'An error occurred';
-          showToast(errorMsg, 'error', {
-            label: 'Retry',
-            onClick: () => sendMessage(content),
-          });
+          showToast(errorMsg, 'error');
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;

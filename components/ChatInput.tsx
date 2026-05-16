@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect, KeyboardEvent, RefObject } from 'react';
+import { useRef, KeyboardEvent, RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Send, Square } from 'lucide-react';
@@ -15,44 +15,37 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, onStop, isGenerating, disabled, inputRef }: ChatInputProps) {
   const localRef = useRef<HTMLTextAreaElement>(null);
+  const activeRef = inputRef || localRef;
 
-  useEffect(() => {
-    if (inputRef && localRef.current) {
-      (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = localRef.current;
-    }
-  });
-
-  const handleSend = useCallback(() => {
-    const value = localRef.current?.value.trim();
+  function handleSend() {
+    const el = activeRef.current;
+    const value = el?.value.trim();
     if (!value || isGenerating) return;
     onSend(value);
-    if (localRef.current) {
-      localRef.current.value = '';
-      localRef.current.style.height = 'auto';
+    if (el) {
+      el.value = '';
+      el.style.height = 'auto';
     }
-  }, [onSend, isGenerating]);
+  }
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend]
-  );
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
 
-  const handleInput = useCallback(() => {
-    const el = localRef.current;
+  function handleInput() {
+    const el = activeRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
-  }, []);
+  }
 
   return (
     <div className="flex items-end gap-2 border-t bg-background p-4">
       <Textarea
-        ref={localRef}
+        ref={activeRef as RefObject<HTMLTextAreaElement>}
         placeholder="Describe the app you want to build..."
         className="min-h-[44px] max-h-[200px] resize-none text-sm"
         rows={1}

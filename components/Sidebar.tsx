@@ -31,27 +31,29 @@ export function Sidebar({
   const [isOpen, setIsOpen] = useState(true);
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
 
-  const loadProjects = useCallback(async () => {
-    const storage = getStorage();
-    const list = await storage.listProjects();
-    setProjects(list);
-  }, []);
-
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects, refreshTrigger]);
+    let cancelled = false;
+    async function load() {
+      const storage = getStorage();
+      const list = await storage.listProjects();
+      if (!cancelled) setProjects(list);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [refreshTrigger]);
 
   const handleDelete = useCallback(
     async (e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       const storage = getStorage();
       await storage.deleteProject(id);
-      await loadProjects();
+      const list = await storage.listProjects();
+      setProjects(list);
       if (activeProjectId === id) {
         onNewChat();
       }
     },
-    [activeProjectId, onNewChat, loadProjects]
+    [activeProjectId, onNewChat]
   );
 
   if (!isOpen) {
@@ -131,15 +133,4 @@ export function Sidebar({
       </div>
     </div>
   );
-}
-
-function formatRelativeTime(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
