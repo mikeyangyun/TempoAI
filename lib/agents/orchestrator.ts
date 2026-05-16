@@ -1,6 +1,6 @@
 import { AgentContext, AgentResult } from '@/types';
 import { LLMProvider } from '@/lib/llm/types';
-import { OpenRouterProvider } from '@/lib/llm/openrouter';
+import { createLLMProvider } from '@/lib/llm';
 import { CodeGeneratorAgent } from './code-generator';
 import { CodeModifierAgent } from './code-modifier';
 import { BaseAgent } from './types';
@@ -11,7 +11,7 @@ export class Orchestrator {
   private codeModifier: BaseAgent;
 
   constructor(llm?: LLMProvider) {
-    this.llm = llm || new OpenRouterProvider();
+    this.llm = llm || createLLMProvider();
     this.codeGenerator = new CodeGeneratorAgent(this.llm);
     this.codeModifier = new CodeModifierAgent(this.llm);
   }
