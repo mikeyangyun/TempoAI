@@ -2,8 +2,8 @@
 
 import { useCallback, useRef, useEffect } from 'react';
 import { useAuth, useClerk } from '@clerk/nextjs';
-import { Sparkles } from 'lucide-react';
 import { ResizablePanel } from '@/components/ResizablePanel';
+import { TempoLogo } from '@/components/TempoLogo';
 import { ChatPanel } from '@/components/ChatPanel';
 import { PreviewPanel } from '@/components/PreviewPanel';
 import { MobileLayout } from '@/components/MobileLayout';
@@ -113,17 +113,16 @@ export default function Home() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="flex h-12 items-center justify-between border-b bg-background/80 backdrop-blur-sm px-4 shadow-[0_1px_3px_0_rgb(0_0_0_/_0.02)]">
+      <header className="relative flex h-12 items-center justify-between bg-background/80 backdrop-blur-sm px-4">
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
         {/* Left: Brand + Project Title */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={newChat}
-            className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2.5 shrink-0 group transition-all"
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-              <Sparkles className="h-4 w-4 text-primary" />
-            </div>
-            <span className="text-sm font-semibold hidden sm:inline">Tempo AI</span>
+            <TempoLogo size="sm" className="group-hover:shadow-lg group-hover:shadow-violet-500/30 transition-all duration-300" />
+            <span className="text-sm font-bold hidden sm:inline tracking-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent group-hover:from-violet-600 group-hover:to-blue-600 dark:group-hover:from-violet-400 dark:group-hover:to-blue-400 transition-all duration-300">Tempo AI</span>
           </button>
 
           {projectTitle && (
