@@ -17,9 +17,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
+    if (!process.env.DEEPSEEK_API_KEY && !process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
       return NextResponse.json(
-        { error: 'Server configuration error: No LLM API key set. Please add ANTHROPIC_API_KEY or OPENROUTER_API_KEY to .env.local.' },
+        { error: 'Server configuration error: No LLM API key set. Please add DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY to .env.local.' },
         { status: 500 }
       );
     }

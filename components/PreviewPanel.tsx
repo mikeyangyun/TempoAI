@@ -11,12 +11,26 @@ import {
   Eye,
   MonitorSmartphone,
   Download,
+  Smartphone,
+  Tablet,
+  Monitor,
+  Copy,
+  Check,
+  Globe,
 } from 'lucide-react';
 import { IframePreviewEngine } from '@/lib/preview/iframe-engine';
 import { VersionTimeline } from '@/components/VersionTimeline';
 import { ProjectVersion } from '@/types';
+import { cn } from '@/lib/utils';
 
 type ViewMode = 'preview' | 'code';
+type DeviceWidth = 'mobile' | 'tablet' | 'desktop';
+
+const DEVICE_WIDTHS: Record<DeviceWidth, number | null> = {
+  mobile: 375,
+  tablet: 768,
+  desktop: null,
+};
 
 interface PreviewPanelProps {
   html?: string | null;
@@ -36,11 +50,12 @@ export function PreviewPanel({
   onRestoreVersion,
 }: PreviewPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
+  const [deviceWidth, setDeviceWidth] = useState<DeviceWidth>('desktop');
   const [prevHtml, setPrevHtml] = useState<string | null | undefined>(null);
+  const [copied, setCopied] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const engineRef = useRef<IframePreviewEngine>(new IframePreviewEngine());
 
-  // Derived state: auto-switch to preview when new HTML arrives
   if (html && html !== prevHtml) {
     setPrevHtml(html);
     if (viewMode !== 'preview') {
@@ -79,27 +94,74 @@ export function PreviewPanel({
     URL.revokeObjectURL(url);
   }, [html]);
 
-  return (
-    <div className="flex h-full flex-col bg-muted/30">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between border-b bg-background px-3 py-2">
-        <Tabs
-          value={viewMode}
-          onValueChange={(v) => setViewMode(v as ViewMode)}
-        >
-          <TabsList className="h-8">
-            <TabsTrigger value="preview" className="gap-1.5 text-xs px-3 h-7">
-              <Eye className="h-3.5 w-3.5" />
-              Preview
-            </TabsTrigger>
-            <TabsTrigger value="code" className="gap-1.5 text-xs px-3 h-7">
-              <Code className="h-3.5 w-3.5" />
-              Code
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+  const handleCopyCode = useCallback(() => {
+    if (!html) return;
+    navigator.clipboard.writeText(html);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [html]);
 
-        <div className="flex items-center gap-1">
+  const lineCount = streamingContent
+    ? streamingContent.split('\n').length
+    : 0;
+
+  const iframeWidth = DEVICE_WIDTHS[deviceWidth];
+
+  return (
+    <div className="flex h-full flex-col bg-muted/20">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between border-b bg-background px-3 py-1.5">
+        {/* Left: View tabs */}
+        <div className="flex items-center gap-2">
+          <Tabs
+            value={viewMode}
+            onValueChange={(v) => setViewMode(v as ViewMode)}
+          >
+            <TabsList className="h-7">
+              <TabsTrigger value="preview" className="gap-1.5 text-[11px] px-2.5 h-6">
+                <Eye className="h-3 w-3" />
+                Preview
+              </TabsTrigger>
+              <TabsTrigger value="code" className="gap-1.5 text-[11px] px-2.5 h-6">
+                <Code className="h-3 w-3" />
+                Code
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* URL bar */}
+          {viewMode === 'preview' && html && (
+            <div className="hidden md:flex items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 py-1 text-[10px] text-muted-foreground font-mono">
+              <Globe className="h-3 w-3" />
+              <span>preview://tempo-app</span>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Controls */}
+        <div className="flex items-center gap-0.5">
+          {/* Device width toggle */}
+          {viewMode === 'preview' && (
+            <div className="hidden sm:flex items-center gap-0.5 mr-1 border-r pr-1.5">
+              {(['mobile', 'tablet', 'desktop'] as DeviceWidth[]).map((device) => (
+                <button
+                  key={device}
+                  onClick={() => setDeviceWidth(device)}
+                  className={cn(
+                    'inline-flex h-6 w-6 items-center justify-center rounded transition-colors',
+                    deviceWidth === device
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {device === 'mobile' && <Smartphone className="h-3 w-3" />}
+                  {device === 'tablet' && <Tablet className="h-3 w-3" />}
+                  {device === 'desktop' && <Monitor className="h-3 w-3" />}
+                </button>
+              ))}
+            </div>
+          )}
+
           {versions.length > 0 && onRestoreVersion && (
             <VersionTimeline
               versions={versions}
@@ -116,7 +178,7 @@ export function PreviewPanel({
             >
               <RotateCw className="h-3.5 w-3.5" />
             </TooltipTrigger>
-            <TooltipContent>Reload preview</TooltipContent>
+            <TooltipContent>Reload</TooltipContent>
           </Tooltip>
 
           <Tooltip>
@@ -145,29 +207,44 @@ export function PreviewPanel({
 
       {/* Content */}
       <div className="relative flex-1 overflow-hidden">
-        {/* Live iframe — always mounted, hidden when not in preview mode or no content */}
-        <iframe
-          ref={iframeRef}
-          sandbox="allow-scripts allow-forms allow-modals allow-popups"
-          className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity duration-200 ${
+        {/* Live iframe */}
+        <div
+          className={cn(
+            'absolute inset-0 flex items-start justify-center overflow-auto transition-opacity duration-300',
             viewMode === 'preview' && html && !isGenerating
               ? 'opacity-100 z-10'
               : 'opacity-0 z-0 pointer-events-none'
-          }`}
-          title="App Preview"
-        />
+          )}
+        >
+          <div
+            className={cn(
+              'h-full transition-all duration-300',
+              iframeWidth ? 'border-x shadow-sm' : 'w-full'
+            )}
+            style={iframeWidth ? { width: `${iframeWidth}px`, maxWidth: '100%' } : undefined}
+          >
+            <iframe
+              ref={iframeRef}
+              sandbox="allow-scripts allow-forms allow-modals allow-popups"
+              className="h-full w-full border-0 bg-white"
+              title="App Preview"
+            />
+          </div>
+        </div>
 
-        {/* Streaming code preview — shown during generation */}
+        {/* Streaming code preview */}
         {isGenerating && (
           <div className="absolute inset-0 z-10 flex flex-col">
-            <div className="flex items-center gap-2 bg-zinc-900 px-4 py-2 border-b border-zinc-700">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-              <span className="text-xs text-zinc-400">Generating...</span>
+            <div className="flex items-center gap-2 bg-card px-4 py-2 border-b">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+              <span className="text-xs text-muted-foreground">
+                Generating...{lineCount > 0 && ` (${lineCount} lines)`}
+              </span>
             </div>
-            <ScrollArea className="flex-1 bg-zinc-950">
-              <pre className="p-4 text-xs text-zinc-300 font-mono leading-relaxed whitespace-pre-wrap">
+            <ScrollArea className="flex-1 bg-card">
+              <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap text-foreground/80">
                 <code>{streamingContent || 'Waiting for response...'}</code>
-                <span className="inline-block h-4 w-1.5 animate-pulse bg-green-400 ml-0.5" />
+                <span className="inline-block h-4 w-1.5 animate-pulse bg-primary ml-0.5" />
               </pre>
             </ScrollArea>
           </div>
@@ -177,11 +254,20 @@ export function PreviewPanel({
         {viewMode === 'code' && !isGenerating && (
           <div className="absolute inset-0 z-10">
             {html ? (
-              <ScrollArea className="h-full bg-zinc-950">
-                <pre className="p-4 text-xs text-zinc-300 font-mono leading-relaxed whitespace-pre-wrap">
-                  <code>{html}</code>
-                </pre>
-              </ScrollArea>
+              <div className="relative h-full">
+                <button
+                  onClick={handleCopyCode}
+                  className="absolute top-3 right-3 z-20 inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shadow-sm"
+                >
+                  {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+                <ScrollArea className="h-full bg-card">
+                  <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap text-foreground/80">
+                    <code>{addLineNumbers(html)}</code>
+                  </pre>
+                </ScrollArea>
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground text-sm bg-background">
                 No code generated yet.
@@ -190,17 +276,19 @@ export function PreviewPanel({
           </div>
         )}
 
-        {/* Empty state — shown when nothing is generated and not generating */}
+        {/* Empty state */}
         {!html && !isGenerating && viewMode === 'preview' && (
           <div className="absolute inset-0 z-10 flex items-center justify-center px-8 bg-background">
             <div className="text-center space-y-4">
-              <MonitorSmartphone className="mx-auto h-12 w-12 text-muted-foreground/40" />
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+                <MonitorSmartphone className="h-8 w-8 text-muted-foreground/40" />
+              </div>
               <div className="space-y-2">
-                <p className="text-lg font-medium text-muted-foreground">
+                <p className="text-base font-medium text-foreground">
                   Your app will appear here
                 </p>
-                <p className="text-sm text-muted-foreground/70">
-                  Describe what you want to build in the chat panel
+                <p className="text-sm text-muted-foreground">
+                  Describe what you want to build in the chat
                 </p>
               </div>
             </div>
@@ -209,4 +297,12 @@ export function PreviewPanel({
       </div>
     </div>
   );
+}
+
+function addLineNumbers(code: string): string {
+  const lines = code.split('\n');
+  const pad = String(lines.length).length;
+  return lines
+    .map((line, i) => `${String(i + 1).padStart(pad, ' ')} | ${line}`)
+    .join('\n');
 }

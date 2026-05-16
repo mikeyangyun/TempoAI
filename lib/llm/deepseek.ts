@@ -1,22 +1,22 @@
 import { LLMOptions } from '@/types';
 import { LLMMessage, LLMProvider } from './types';
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const DEFAULT_MODEL = 'claude-3-5-sonnet-20241022';
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+const DEFAULT_MODEL = 'deepseek-chat';
 
-export class AnthropicProvider implements LLMProvider {
+export class DeepSeekProvider implements LLMProvider {
   private apiKey: string;
   private defaultModel: string;
 
   constructor() {
-    const key = process.env.ANTHROPIC_API_KEY;
+    const key = process.env.DEEPSEEK_API_KEY;
     if (!key) {
       throw new Error(
-        'ANTHROPIC_API_KEY is not set. Please add it to your .env.local file.'
+        'DEEPSEEK_API_KEY is not set. Please add it to your .env.local file.'
       );
     }
     this.apiKey = key;
-    this.defaultModel = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
+    this.defaultModel = process.env.DEEPSEEK_MODEL || DEFAULT_MODEL;
   }
 
   async *streamChat(
@@ -26,27 +26,19 @@ export class AnthropicProvider implements LLMProvider {
     const model = options?.model || this.defaultModel;
     const signal = options?.signal;
 
-    // Anthropic API separates system message from the messages array
-    const systemMessage = messages.find((m) => m.role === 'system');
-    const chatMessages = messages
-      .filter((m) => m.role !== 'system')
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-
     const body = JSON.stringify({
       model,
-      system: systemMessage?.content || '',
-      messages: chatMessages,
+      messages,
       stream: true,
-      max_tokens: options?.maxTokens || 4096,
       temperature: options?.temperature ?? 0.7,
+      ...(options?.maxTokens && { max_tokens: options.maxTokens }),
     });
 
-    const response = await fetch(ANTHROPIC_API_URL, {
+    const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
+        Authorization: `Bearer ${this.apiKey}`,
       },
       body,
       signal,
@@ -57,13 +49,13 @@ export class AnthropicProvider implements LLMProvider {
       const status = response.status;
 
       if (status === 401) {
-        throw new Error('Invalid API key. Please check your ANTHROPIC_API_KEY.');
+        throw new Error('Invalid API key. Please check your DEEPSEEK_API_KEY.');
       }
       if (status === 429) {
         throw new Error('Rate limit exceeded. Please wait a moment and try again.');
       }
       if (status >= 500) {
-        throw new Error(`Anthropic service error (${status}). Please try again later.`);
+        throw new Error(`DeepSeek service error (${status}). Please try again later.`);
       }
       throw new Error(
         `LLM request failed (${status}): ${errorBody.slice(0, 200)}`
@@ -96,20 +88,11 @@ export class AnthropicProvider implements LLMProvider {
 
           try {
             const parsed = JSON.parse(data);
-
-            // Anthropic SSE event types
-            if (parsed.type === 'content_block_delta') {
-              const text = parsed.delta?.text;
-              if (text) {
-                yield text;
-              }
-            } else if (parsed.type === 'message_stop') {
-              return;
-            } else if (parsed.type === 'error') {
-              throw new Error(parsed.error?.message || 'Stream error from Anthropic');
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              yield content;
             }
-          } catch (e) {
-            if (e instanceof Error && e.message.includes('Stream error')) throw e;
+          } catch {
             // Skip malformed JSON chunks
           }
         }
