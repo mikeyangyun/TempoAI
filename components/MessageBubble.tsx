@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/types';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, FileCode2, Check } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -42,7 +42,7 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
           {!isUser && !message.content && isStreaming ? (
             <StreamingIndicator />
           ) : (
-            <MessageContent content={message.content} isUser={isUser} />
+            <MessageContent content={message.content} isUser={isUser} hasCode={!!message.rawContent} />
           )}
           {isStreaming && message.content && <StreamingCursor />}
         </div>
@@ -51,32 +51,30 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
   );
 }
 
-function MessageContent({ content, isUser }: { content: string; isUser: boolean }) {
+function MessageContent({ content, isUser, hasCode }: { content: string; isUser: boolean; hasCode: boolean }) {
   if (isUser) {
     return <span className="whitespace-pre-wrap">{content}</span>;
   }
 
-  const parts = splitCodeBlocks(content);
-
   return (
     <div className="space-y-2">
-      {parts.map((part, i) => {
-        if (part.type === 'code') {
-          return (
-            <pre
-              key={i}
-              className="overflow-x-auto rounded-lg bg-zinc-900 p-3 text-xs text-zinc-100 dark:bg-zinc-950"
-            >
-              <code>{part.content}</code>
-            </pre>
-          );
-        }
-        return (
-          <span key={i} className="whitespace-pre-wrap">
-            {part.content}
-          </span>
-        );
-      })}
+      <span className="whitespace-pre-wrap">{content}</span>
+      {hasCode && <GeneratedAppCard />}
+    </div>
+  );
+}
+
+function GeneratedAppCard() {
+  return (
+    <div className="flex items-center gap-2.5 mt-2 rounded-lg border bg-background/50 px-3 py-2">
+      <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+        <FileCode2 className="h-3.5 w-3.5 text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium">App generated</p>
+        <p className="text-[10px] text-muted-foreground">View in preview panel</p>
+      </div>
+      <Check className="h-4 w-4 text-green-500" />
     </div>
   );
 }
@@ -95,31 +93,4 @@ function StreamingCursor() {
   return (
     <span className="inline-block ml-0.5 h-4 w-0.5 animate-pulse bg-current opacity-70" />
   );
-}
-
-type ContentPart = { type: 'text' | 'code'; content: string };
-
-function splitCodeBlocks(text: string): ContentPart[] {
-  const parts: ContentPart[] = [];
-  const regex = /```[\w]*\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
-    }
-    parts.push({ type: 'code', content: match[1].trim() });
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ type: 'text', content: text.slice(lastIndex) });
-  }
-
-  if (parts.length === 0) {
-    parts.push({ type: 'text', content: text });
-  }
-
-  return parts;
 }

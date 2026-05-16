@@ -10,6 +10,40 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/**
+ * Splits streaming content into text (for chat) and code (for preview).
+ * Text = everything outside ```html ... ``` fences.
+ * Code = everything inside the fence.
+ */
+function splitStreamContent(fullText: string): { chatText: string; codeText: string } {
+  const fenceOpenRegex = /```html\s*\n?/;
+  const fenceCloseRegex = /\n?```/;
+
+  const openMatch = fullText.match(fenceOpenRegex);
+
+  if (!openMatch || openMatch.index === undefined) {
+    return { chatText: fullText, codeText: '' };
+  }
+
+  const beforeFence = fullText.slice(0, openMatch.index);
+  const afterOpenIndex = openMatch.index + openMatch[0].length;
+  const contentAfterOpen = fullText.slice(afterOpenIndex);
+
+  const closeMatch = contentAfterOpen.match(fenceCloseRegex);
+
+  if (!closeMatch || closeMatch.index === undefined) {
+    // Fence open but not closed — still streaming code
+    return { chatText: beforeFence.trim(), codeText: contentAfterOpen };
+  }
+
+  // Fence closed — code complete, grab any text after
+  const code = contentAfterOpen.slice(0, closeMatch.index);
+  const afterClose = contentAfterOpen.slice(closeMatch.index + closeMatch[0].length);
+  const chatText = (beforeFence + afterClose).trim();
+
+  return { chatText, codeText: code };
+}
+
 interface UseChatReturn {
   messages: ChatMessage[];
   isGenerating: boolean;
@@ -76,7 +110,6 @@ export function useChat(): UseChatReturn {
     async (content: string) => {
       if (!content.trim() || isGenerating) return;
 
-      // Create project if this is the first message
       let projectId = projectIdRef.current;
       if (!projectId) {
         projectId = generateId();
@@ -123,9 +156,10 @@ export function useChat(): UseChatReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || `Request failed with status ${response.status}`
-          );
+          const errorMessage = errorData.error || `Request failed with status ${response.status}`;
+          const err = new Error(errorMessage);
+          (err as Error & { status?: number }).status = response.status;
+          throw err;
         }
 
         const reader = response.body?.getReader();
@@ -141,13 +175,16 @@ export function useChat(): UseChatReturn {
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
 
-          setStreamingContent(fullContent);
+          // Split stream: chat gets text, preview gets code
+          const { chatText, codeText } = splitStreamContent(fullContent);
+
+          setStreamingContent(codeText);
 
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-              updated[lastIdx] = { ...updated[lastIdx], content: fullContent };
+              updated[lastIdx] = { ...updated[lastIdx], content: chatText };
             }
             return updated;
           });
@@ -163,10 +200,13 @@ export function useChat(): UseChatReturn {
           setCurrentHtml(newHtml);
         }
 
-        // Auto-save with version snapshot
+        // Final message: store full raw content for persistence (includes code)
+        // but display only the chat text
+        const { chatText: finalChatText } = splitStreamContent(fullContent);
         const finalMessages: ChatMessage[] = [...updatedMessages, {
           ...assistantMessage,
-          content: fullContent,
+          content: finalChatText,
+          rawContent: fullContent,
         }];
         setMessages(finalMessages);
 

@@ -1,10 +1,17 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
-const isProtectedRoute = createRouteMatcher(['/api/chat(.*)']);
+const isProtectedApiRoute = createRouteMatcher(['/api/chat(.*)']);
 
 export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedRoute(request)) {
-    await auth.protect();
+  if (isProtectedApiRoute(request)) {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please sign in to generate apps.' },
+        { status: 401 }
+      );
+    }
   }
 });
 

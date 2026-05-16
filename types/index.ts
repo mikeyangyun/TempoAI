@@ -3,6 +3,7 @@ export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  rawContent?: string;
 };
 
 export type ProjectVersion = {

@@ -235,17 +235,35 @@ export function PreviewPanel({
         {/* Streaming code preview */}
         {isGenerating && (
           <div className="absolute inset-0 z-10 flex flex-col">
-            <div className="flex items-center gap-2 bg-card px-4 py-2 border-b">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-              <span className="text-xs text-muted-foreground">
-                Generating...{lineCount > 0 && ` (${lineCount} lines)`}
-              </span>
+            <div className="flex items-center justify-between bg-card px-4 py-2 border-b">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                <span className="text-xs font-medium text-foreground">
+                  {streamingContent ? 'Writing code...' : 'Thinking...'}
+                </span>
+              </div>
+              {lineCount > 0 && (
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {lineCount} lines
+                </span>
+              )}
             </div>
             <ScrollArea className="flex-1 bg-card">
-              <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap text-foreground/80">
-                <code>{streamingContent || 'Waiting for response...'}</code>
-                <span className="inline-block h-4 w-1.5 animate-pulse bg-primary ml-0.5" />
-              </pre>
+              {streamingContent ? (
+                <pre className="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap text-foreground/80">
+                  <code>{streamingContent}</code>
+                  <span className="inline-block h-4 w-1.5 animate-pulse bg-primary ml-0.5" />
+                </pre>
+              ) : (
+                <div className="flex items-center justify-center h-32">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40" />
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40 [animation-delay:150ms]" />
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-muted-foreground/40 [animation-delay:300ms]" />
+                    <span className="ml-2 text-xs">Analyzing your request...</span>
+                  </div>
+                </div>
+              )}
             </ScrollArea>
           </div>
         )}
