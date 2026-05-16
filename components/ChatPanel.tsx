@@ -101,6 +101,7 @@ export function ChatPanel({
                   key={msg.id}
                   message={msg}
                   isStreaming={isLastAssistant}
+                  isGenerating={isGenerating}
                   streamPhase={isLastAssistant ? streamPhase : undefined}
                   agentName={isLastAssistant ? agentName : msg.agentName}
                   streamingLineCount={isLastAssistant ? streamingLineCount : undefined}

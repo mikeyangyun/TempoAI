@@ -27,6 +27,7 @@ import {
 interface MessageBubbleProps {
   message: ChatMessage;
   isStreaming?: boolean;
+  isGenerating?: boolean;
   streamPhase?: StreamPhase;
   agentName?: string;
   streamingLineCount?: number;
@@ -38,6 +39,7 @@ interface MessageBubbleProps {
 export function MessageBubble({
   message,
   isStreaming,
+  isGenerating,
   streamPhase = 'idle',
   agentName = '',
   streamingLineCount = 0,
@@ -59,6 +61,7 @@ export function MessageBubble({
     <AssistantMessage
       message={message}
       isStreaming={isStreaming}
+      isGenerating={isGenerating}
       streamPhase={streamPhase}
       agentName={agentName}
       streamingLineCount={streamingLineCount}
@@ -80,6 +83,7 @@ const ROLE_CONFIG: Record<string, { icon: typeof ClipboardList; color: string; g
 interface AssistantMessageProps {
   message: ChatMessage;
   isStreaming?: boolean;
+  isGenerating?: boolean;
   streamPhase: StreamPhase;
   agentName: string;
   streamingLineCount: number;
@@ -91,6 +95,7 @@ interface AssistantMessageProps {
 function AssistantMessage({
   message,
   isStreaming,
+  isGenerating,
   streamPhase,
   agentName,
   streamingLineCount,
@@ -268,6 +273,7 @@ function AssistantMessage({
             isStreaming={!!isStreaming}
             onImplement={handleImplement}
             showImplement={!!onImplementPlan && !isStreaming}
+            buildDisabled={!!isGenerating}
           />
         </div>
       ) : isSprintTeam ? (
@@ -576,12 +582,14 @@ interface PlanCardProps {
   isStreaming: boolean;
   onImplement: () => void;
   showImplement: boolean;
+  buildDisabled?: boolean;
 }
 
-function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCardProps) {
+function PlanCard({ content, isStreaming, onImplement, showImplement, buildDisabled }: PlanCardProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [implemented, setImplemented] = useState(false);
   const lineCount = content.split('\n').filter(l => l.trim()).length;
+  const isDisabled = implemented || !!buildDisabled;
 
   return (
     <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.03] dark:bg-blue-500/[0.06] overflow-hidden">
@@ -625,16 +633,16 @@ function PlanCard({ content, isStreaming, onImplement, showImplement }: PlanCard
         <div className="px-4 py-3 border-t border-blue-500/10 bg-gradient-to-r from-blue-500/[0.03] to-violet-500/[0.03]">
           <button
             onClick={() => { setImplemented(true); onImplement(); }}
-            disabled={implemented}
+            disabled={isDisabled}
             className={cn(
               'inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all',
-              implemented
+              isDisabled
                 ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
                 : 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 hover:scale-[1.02] active:scale-[0.98]'
             )}
           >
             <Rocket className="h-4 w-4" />
-            {implemented ? 'Building...' : 'Build this'}
+            {isDisabled ? 'Building...' : 'Build this'}
           </button>
         </div>
       )}

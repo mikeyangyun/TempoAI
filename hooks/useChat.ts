@@ -445,7 +445,7 @@ export function useChat(): UseChatReturn {
         setLastParseResult(result);
 
         const { chatText: finalChatText } = splitStreamContent(cleanedFinal);
-        const currentAgentName = agentName || headerAgentName;
+        const currentAgentName = headerAgentName;
         const isTeam = currentAgentName === 'SprintTeam';
 
         let summaryContent = finalChatText;
