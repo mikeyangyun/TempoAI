@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, RefObject } from 'react';
 import { MessageSquare } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { EmptyState } from '@/components/EmptyState';
@@ -68,7 +67,7 @@ export function ChatPanel({
         </div>
       )}
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <EmptyState onSelectPrompt={onSend} />
         ) : (
@@ -96,7 +95,7 @@ export function ChatPanel({
             <div ref={bottomRef} />
           </div>
         )}
-      </ScrollArea>
+      </div>
 
       <ChatInput
         onSend={onSend}
