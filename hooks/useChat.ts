@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChatMessage, ParseResult } from '@/types';
+import { ChatMessage, ParseResult, Project } from '@/types';
 import { parseHtmlFence } from '@/lib/parser';
+import { getStorage } from '@/lib/storage';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -14,10 +15,12 @@ interface UseChatReturn {
   currentHtml: string | null;
   streamingContent: string;
   lastParseResult: ParseResult | null;
+  activeProjectId: string | null;
+  refreshTrigger: number;
   sendMessage: (content: string) => void;
   stopGeneration: () => void;
-  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
-  setCurrentHtml: React.Dispatch<React.SetStateAction<string | null>>;
+  loadProject: (id: string) => Promise<void>;
+  newChat: () => void;
 }
 
 export function useChat(): UseChatReturn {
@@ -26,11 +29,53 @@ export function useChat(): UseChatReturn {
   const [currentHtml, setCurrentHtml] = useState<string | null>(null);
   const [streamingContent, setStreamingContent] = useState('');
   const [lastParseResult, setLastParseResult] = useState<ParseResult | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const projectIdRef = useRef<string | null>(null);
+
+  const saveProject = useCallback(
+    async (
+      projectId: string,
+      msgs: ChatMessage[],
+      html: string | null,
+      versions?: Project['versions']
+    ) => {
+      const storage = getStorage();
+      const existing = await storage.getProject(projectId);
+
+      const title =
+        existing?.title ||
+        msgs.find((m) => m.role === 'user')?.content.slice(0, 40) ||
+        'Untitled';
+
+      const project: Project = {
+        id: projectId,
+        title,
+        messages: msgs,
+        currentHtml: html,
+        versions: versions || existing?.versions || [],
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      await storage.saveProject(project);
+      setRefreshTrigger((n) => n + 1);
+    },
+    []
+  );
 
   const sendMessage = useCallback(
     async (content: string) => {
       if (!content.trim() || isGenerating) return;
+
+      // Create project if this is the first message
+      let projectId = projectIdRef.current;
+      if (!projectId) {
+        projectId = generateId();
+        projectIdRef.current = projectId;
+        setActiveProjectId(projectId);
+      }
 
       const userMessage: ChatMessage = {
         id: generateId(),
@@ -52,7 +97,8 @@ export function useChat(): UseChatReturn {
         timestamp: Date.now(),
       };
 
-      setMessages([...updatedMessages, assistantMessage]);
+      const messagesWithAssistant = [...updatedMessages, assistantMessage];
+      setMessages(messagesWithAssistant);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -88,33 +134,46 @@ export function useChat(): UseChatReturn {
           const chunk = decoder.decode(value, { stream: true });
           fullContent += chunk;
 
-          // Update streaming content for preview panel
           setStreamingContent(fullContent);
 
-          // Update the assistant message progressively
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-              updated[lastIdx] = {
-                ...updated[lastIdx],
-                content: fullContent,
-              };
+              updated[lastIdx] = { ...updated[lastIdx], content: fullContent };
             }
             return updated;
           });
         }
 
-        // Parse the final response for HTML
+        // Parse and update HTML
         const result = parseHtmlFence(fullContent);
         setLastParseResult(result);
 
+        let newHtml = currentHtml;
         if (result.status === 'complete') {
-          setCurrentHtml(result.html);
+          newHtml = result.html;
+          setCurrentHtml(newHtml);
         }
+
+        // Auto-save with version snapshot
+        const finalMessages: ChatMessage[] = [...updatedMessages, {
+          ...assistantMessage,
+          content: fullContent,
+        }];
+        setMessages(finalMessages);
+
+        const storage = getStorage();
+        const existing = await storage.getProject(projectId);
+        const versions = existing?.versions || [];
+
+        if (result.status === 'complete' && newHtml) {
+          versions.push({ html: newHtml, timestamp: Date.now() });
+        }
+
+        await saveProject(projectId, finalMessages, newHtml, versions);
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
-          // User cancelled — update the message to show it was stopped
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
@@ -142,16 +201,50 @@ export function useChat(): UseChatReturn {
             return updated;
           });
         }
+
+        // Save even on error/abort so messages persist
+        const currentMsgs = messages;
+        setMessages((prev) => {
+          // Schedule save after state update
+          setTimeout(() => {
+            if (projectId) {
+              saveProject(projectId, prev, currentHtml);
+            }
+          }, 0);
+          return prev;
+        });
       } finally {
         setIsGenerating(false);
         abortControllerRef.current = null;
       }
     },
-    [messages, isGenerating, currentHtml]
+    [messages, isGenerating, currentHtml, saveProject]
   );
 
   const stopGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
+  }, []);
+
+  const loadProject = useCallback(async (id: string) => {
+    const storage = getStorage();
+    const project = await storage.getProject(id);
+    if (!project) return;
+
+    setMessages(project.messages);
+    setCurrentHtml(project.currentHtml);
+    setActiveProjectId(id);
+    projectIdRef.current = id;
+    setStreamingContent('');
+    setLastParseResult(null);
+  }, []);
+
+  const newChat = useCallback(() => {
+    setMessages([]);
+    setCurrentHtml(null);
+    setActiveProjectId(null);
+    projectIdRef.current = null;
+    setStreamingContent('');
+    setLastParseResult(null);
   }, []);
 
   return {
@@ -160,9 +253,11 @@ export function useChat(): UseChatReturn {
     currentHtml,
     streamingContent,
     lastParseResult,
+    activeProjectId,
+    refreshTrigger,
     sendMessage,
     stopGeneration,
-    setMessages,
-    setCurrentHtml,
+    loadProject,
+    newChat,
   };
 }
