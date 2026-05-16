@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
           }
           controller.close();
         } catch (error) {
+          console.error('[API/chat] Stream error:', error);
           const message =
             error instanceof Error ? error.message : 'Stream error';
           controller.enqueue(encoder.encode(`\n\n[ERROR: ${message}]`));
