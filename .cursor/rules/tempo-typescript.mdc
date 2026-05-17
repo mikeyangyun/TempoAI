@@ -1,0 +1,32 @@
+---
+description: TypeScript and code quality standards for Tempo AI
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript Standards
+
+## Types
+- All shared types in `types/index.ts` — no inline type definitions for domain models
+- Agent-specific types (e.g. `TeamPhaseInfo`, `RoleSegment`) co-located in their module
+- Prefer `type` over `interface` for data shapes; use `interface` only for contracts agents/providers implement
+- No `any` — use `unknown` + type narrowing when type is uncertain
+
+## Code Style
+- Named exports only — no default exports (except Next.js pages)
+- Async generators for streaming: `async *method(): AsyncIterable<string>`
+- Functional components with explicit prop interfaces
+- Destructure props in function signature, not in body
+- No barrel files (`index.ts` re-exports) except for `lib/storage/index.ts` facade
+
+## Error Handling
+- LLM errors: catch, log server-side, surface user-friendly message via `[ERROR: ...]` in stream
+- Never swallow errors silently — at minimum `console.error` with context
+- API routes: return structured JSON errors with appropriate status codes
+
+## Naming
+- Files: kebab-case (`sprint-orchestrator.ts`)
+- Components: PascalCase (`MessageBubble.tsx`)
+- Hooks: camelCase with `use` prefix (`useChat.ts`)
+- Types: PascalCase (`ChatMessage`, `SprintContext`)
+- Constants: UPPER_SNAKE for module-level (`MAX_QA_RETRIES`, `PROMPT_BA`)
