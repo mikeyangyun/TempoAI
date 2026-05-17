@@ -1,43 +1,65 @@
 'use client';
 
-import { Sparkles, ListTodo, Calculator, Globe, Palette, Timer, Cloud } from 'lucide-react';
+import { TempoLogo } from '@/components/TempoLogo';
+import {
+  ListTodo,
+  Calculator,
+  Globe,
+  Palette,
+  Timer,
+  Cloud,
+  ArrowRight,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const SUGGESTIONS = [
   {
     icon: ListTodo,
     title: 'Todo App',
-    description: 'A task manager with add, complete, and delete',
+    description: 'Task manager with CRUD',
     prompt: 'Build a todo app with add, mark complete, and delete functionality. Use a clean modern design.',
+    color: 'text-violet-500',
+    bg: 'bg-violet-500/10 group-hover:bg-violet-500/20',
   },
   {
     icon: Calculator,
     title: 'Calculator',
-    description: 'A functional calculator with basic operations',
+    description: 'Functional calculator',
     prompt: 'Create a calculator app that supports basic arithmetic (+, -, ×, ÷) with a nice button layout.',
+    color: 'text-blue-500',
+    bg: 'bg-blue-500/10 group-hover:bg-blue-500/20',
   },
   {
     icon: Globe,
     title: 'Landing Page',
-    description: 'A modern product landing page',
+    description: 'Modern SaaS page',
     prompt: 'Build a modern landing page for a SaaS product called "FlowSync" — include hero, features section, and CTA.',
+    color: 'text-cyan-500',
+    bg: 'bg-cyan-500/10 group-hover:bg-cyan-500/20',
   },
   {
     icon: Palette,
     title: 'Color Picker',
-    description: 'An interactive color palette tool',
+    description: 'Interactive palette tool',
     prompt: 'Make an interactive color picker that shows hex/rgb values, has a palette of presets, and lets you copy colors.',
+    color: 'text-pink-500',
+    bg: 'bg-pink-500/10 group-hover:bg-pink-500/20',
   },
   {
     icon: Timer,
     title: 'Pomodoro Timer',
-    description: 'A focus timer with work/break cycles',
+    description: 'Focus timer with cycles',
     prompt: 'Build a Pomodoro timer with 25min work / 5min break cycles, start/pause/reset controls, and a progress ring.',
+    color: 'text-amber-500',
+    bg: 'bg-amber-500/10 group-hover:bg-amber-500/20',
   },
   {
     icon: Cloud,
     title: 'Weather Card',
-    description: 'A weather display component',
+    description: 'Weather display UI',
     prompt: 'Create a beautiful weather card UI showing temperature, condition icon, humidity, and a 5-day forecast with mock data.',
+    color: 'text-emerald-500',
+    bg: 'bg-emerald-500/10 group-hover:bg-emerald-500/20',
   },
 ];
 
@@ -47,42 +69,62 @@ interface EmptyStateProps {
 
 export function EmptyState({ onSelectPrompt }: EmptyStateProps) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6 py-12">
-      <div className="mb-10 text-center">
-        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-          <Sparkles className="h-7 w-7 text-primary" />
-        </div>
-        <h2 className="text-2xl font-bold tracking-tight mb-2">
-          What do you want to build?
-        </h2>
-        <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-          Describe your app in natural language or pick a template below
-        </p>
+    <div className="relative flex h-full flex-col items-center justify-center px-6 py-10">
+      {/* Subtle ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute top-[10%] left-1/2 -translate-x-1/2 h-[300px] w-[400px] rounded-full bg-gradient-to-br from-violet-500/5 via-blue-500/3 to-transparent blur-3xl dark:from-violet-500/10 dark:via-blue-500/5" />
       </div>
 
-      <div className="grid w-full max-w-2xl grid-cols-2 lg:grid-cols-3 gap-2.5">
-        {SUGGESTIONS.map((suggestion) => {
-          const Icon = suggestion.icon;
-          return (
-            <button
-              key={suggestion.title}
-              onClick={() => onSelectPrompt(suggestion.prompt)}
-              className="group flex flex-col items-start gap-2 rounded-xl border bg-card p-4 text-left transition-all hover:bg-accent hover:border-primary/20 hover:shadow-sm"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted group-hover:bg-primary/10 transition-colors">
-                <Icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-              <div>
-                <span className="text-sm font-medium group-hover:text-primary transition-colors">
-                  {suggestion.title}
-                </span>
-                <span className="block text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                  {suggestion.description}
-                </span>
-              </div>
-            </button>
-          );
-        })}
+      <div className="relative z-10 w-full max-w-md space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-3 animate-fade-in-up">
+          <TempoLogo size="md" className="mx-auto mb-3" />
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            What do you want to{' '}
+            <span className="bg-gradient-to-r from-violet-600 to-blue-600 dark:from-violet-400 dark:to-blue-400 bg-clip-text text-transparent">
+              build
+            </span>
+            ?
+          </h2>
+          <p className="text-[13px] text-muted-foreground/70 leading-relaxed">
+            Describe your idea below, or pick a template to get started
+          </p>
+        </div>
+
+        {/* Template grid */}
+        <div className="grid grid-cols-2 gap-2 animate-fade-in-up-delay-1">
+          {SUGGESTIONS.map((suggestion) => {
+            const Icon = suggestion.icon;
+            return (
+              <button
+                key={suggestion.title}
+                onClick={() => onSelectPrompt(suggestion.prompt)}
+                className="group flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 px-3.5 py-3 text-left transition-all duration-200 hover:border-border hover:bg-card hover:shadow-sm"
+              >
+                <div className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200',
+                  suggestion.bg,
+                )}>
+                  <Icon className={cn('h-4 w-4', suggestion.color)} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-semibold text-foreground/90 group-hover:text-foreground transition-colors">
+                    {suggestion.title}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/50 truncate">
+                    {suggestion.description}
+                  </p>
+                </div>
+                <ArrowRight className="h-3 w-3 text-muted-foreground/0 group-hover:text-muted-foreground/40 transition-all duration-200 -translate-x-1 group-hover:translate-x-0" />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer hint */}
+        <p className="text-center text-[10px] text-muted-foreground/30 animate-fade-in-up-delay-2">
+          Powered by Tempo AI Sprint Team — BA, TL, UI/UX, Dev, QA
+        </p>
       </div>
     </div>
   );
