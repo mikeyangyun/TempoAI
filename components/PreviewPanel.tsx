@@ -252,11 +252,11 @@ export function PreviewPanel({
 
       {/* Content */}
       <div className="relative flex-1 overflow-hidden">
-        {/* Live iframe */}
+        {/* Live iframe — hidden during generation, shown only when complete */}
         <div
           className={cn(
             'absolute inset-0 flex items-start justify-center overflow-auto transition-opacity duration-300',
-            viewMode === 'preview' && html
+            viewMode === 'preview' && html && !isGenerating
               ? 'opacity-100 z-10'
               : 'opacity-0 z-0 pointer-events-none'
           )}
@@ -277,8 +277,8 @@ export function PreviewPanel({
           </div>
         </div>
 
-        {/* Generation splash screen - only when no existing preview */}
-        {isGenerating && !html && (
+        {/* Generation splash screen — always shown during generation */}
+        {isGenerating && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
             <div className="flex flex-col items-center gap-6 max-w-sm text-center px-8">
               {/* Animated rings */}
