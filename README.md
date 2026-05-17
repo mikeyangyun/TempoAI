@@ -14,7 +14,7 @@ Most AI code generators treat the LLM as a single black box: user sends prompt, 
 
 Core design principles:
 1. **Separation of concerns** — each agent (BA, TL, UI/UX, Dev, QA) owns one responsibility
-2. **Quality through iteration** — QA validates against requirements and design specs; Dev fixes issues in up to 3 retry rounds
+2. **Quality through iteration** — QA validates against requirements and design specs; Dev fixes issues in up to 3 retry rounds, with TL escalation if issues persist
 3. **Transparency** — the entire team's thinking process is visible in the chat as collapsible role cards
 4. **Progressive engagement** — the UI is fully explorable before sign-in; authentication only triggers on action
 
@@ -39,22 +39,25 @@ User Input (natural language)
 │                 │    │                                       │
 │ Structured plan │    │  ┌─────┐  ┌────┐  ┌──────┐          │
 │ with selectable │    │  │ BA  │─▶│ TL │─▶│UI/UX │          │
-│ bullet points   │    │  └──┬──┘  └────┘  └──┬───┘          │
-│                 │    │     │ reject?         │              │
+│ bullet points   │    │  └──┬──┘  └──┬─┘  └──┬───┘          │
+│                 │    │     │ reject? │       │              │
 │  [Build this]   │    │     │ question?       ▼              │
 │  (user selects  │    │     │          ┌──────────┐          │
-│   items to      │    │     │          │   Dev    │          │
-│   implement)    │    │     │          └────┬─────┘          │
-└─────────────────┘    │     │               │                │
-                       │     │               ▼                │
-                       │     │          ┌─────────┐           │
-                       │     │          │   QA    │           │
-                       │     │          └────┬────┘           │
-                       │     │    ┌──────────┤               │
-                       │     │    │ FAIL     │ PASS           │
-                       │     │    │ (max 3x) │                │
-                       │     │    ▼          ▼                │
-                       │     │  Dev fix    MVP Shipped        │
+│   items to      │    │     │          │   Dev    │◀─────┐   │
+│   implement)    │    │     │          └────┬─────┘      │   │
+└─────────────────┘    │     │               │            │   │
+                       │     │               ▼            │   │
+                       │     │          ┌─────────┐       │   │
+                       │     │          │   QA    │       │   │
+                       │     │          └────┬────┘       │   │
+                       │     │    ┌──────────┤           │   │
+                       │     │    │ FAIL     │ PASS       │   │
+                       │     │    │ (max 3x) │            │   │
+                       │     │    ▼          ▼            │   │
+                       │     │  Dev fix    MVP Shipped    │   │
+                       │     │    │                       │   │
+                       │     │    └─(still failing)──▶ TL ┘   │
+                       │     │                     review     │
                        └─────┴────────────────────────────────┘
                                        │
                                        ▼
@@ -69,7 +72,7 @@ User Input (natural language)
 | Agent | Name | Responsibility |
 |-------|------|----------------|
 | **BA** (Business Analyst) | Mike | Assesses request clarity (clear / vague / too vague), produces spec with features and acceptance criteria, or asks clarifying questions |
-| **TL** (Tech Lead) | Sarah | Defines architecture, file structure, state management strategy, and build order |
+| **TL** (Tech Lead) | Sarah | Defines architecture, file structure, state management strategy, and build order; escalation reviewer when QA-Dev loop exhausts retries |
 | **UI/UX** (Designer) | Alex | Specifies colors, typography, layout, spacing, and interaction patterns with concrete values |
 | **Dev** (Developer) | Jordan | Implements the full application as multi-file output (HTML + CSS + JS), handles iterations preserving existing features |
 | **QA** (Engineer) | Chris | Validates against BA's acceptance criteria AND UI/UX design specs; fails with itemized issues for Dev to fix |
@@ -84,7 +87,7 @@ The BA classifies every incoming request into one of three categories:
 
 This prevents the team from wasting effort on unclear requirements.
 
-### QA-Dev Feedback Loop
+### QA-Dev Feedback Loop with TL Escalation
 
 ```
 Dev writes code
@@ -104,8 +107,27 @@ QA validates against:
          Dev fixes ALL issues
          (with full BA + UI/UX context)
               │
-              └──→ QA re-validates
-                   (up to 3 retry rounds)
+              └──→ QA re-validates (up to 3 rounds)
+                        │
+                        └─── Still failing after 3 rounds?
+                                    │
+                                    ▼
+                             TL (Sarah) escalation
+                             Analyzes root cause, revises approach
+                                    │
+                                    ▼
+                             Dev rebuilds with TL guidance
+                                    │
+                                    ▼
+                             Final QA validation
+                                    │
+                              ┌─────┴─────┐
+                              │           │
+                           PASS        FAIL
+                              │           │
+                         MVP Shipped   User notified
+                                      (honest feedback,
+                                       continue conversation)
 ```
 
 ---
@@ -276,7 +298,9 @@ Key design decisions:
 - **Async generator pattern** — each agent `yield*`s chunks, enabling true token-level streaming through the entire pipeline
 - **BA gating** — the orchestrator checks BA output for `[BA:REJECT]` or `[QUESTIONS]` markers and halts the sprint early, avoiding wasted LLM calls
 - **Context threading** — BA output feeds into TL and UI/UX; all three feed into Dev; BA + UI/UX + Dev code feed into QA
-- **QA retry loop** — on failure, QA's itemized feedback plus original BA/UI/UX specs are sent back to Dev for targeted fixes
+- **QA retry loop** — on failure, QA's itemized feedback plus original BA/UI/UX specs are sent back to Dev for targeted fixes (up to 3 rounds)
+- **TL escalation** — if QA still fails after 3 rounds, TL reviews the persistent issues and provides a revised technical approach; Dev rebuilds once more; final QA decides pass/fail
+- **Honest failure reporting** — if QA fails even after TL escalation, the sprint emits `[SPRINT:INCOMPLETE]` and the frontend displays an honest card encouraging the user to continue the conversation
 
 ### Streaming Content Parser (`hooks/useChat.ts`)
 
@@ -300,7 +324,7 @@ The `mergeFilesToHtml()` function reassembles multi-file output into a single HT
 ### Message Bubble System (`components/MessageBubble.tsx`)
 
 The most complex UI component, rendering different message types:
-- **Team Sprint** — collapsible `RoleCard` per agent, `QuestionCard` for BA questions, `RejectionCard` for vague requests, `SprintSummaryCard` on completion
+- **Team Sprint** — collapsible `RoleCard` per agent, `QuestionCard` for BA questions, `RejectionCard` for vague requests, `SprintSummaryCard` on completion, `SprintIncompleteCard` when QA exhausts all retries
 - **Plan Mode** — `PlanCard` with selectable checkboxes per plan item, select-all toggle, and contextual "Build N selected" button
 - **Legacy Agent** — `ThinkingSteps` timeline showing analyze → route → write → validate → fix phases
 - **Historical reconstruction** — `rebuildTeamProgress()` reconstructs team progress from persisted `sprintRaw` for messages loaded from storage
