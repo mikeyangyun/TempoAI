@@ -7,7 +7,7 @@ import { UIUXAgent } from './uiux-agent';
 import { DevAgent } from './dev-agent';
 import { QAAgent } from './qa-agent';
 
-const MAX_QA_RETRIES = 2;
+const MAX_QA_RETRIES = 3;
 
 type RoleInfo = { role: TeamRole; name: string; title: string };
 
@@ -109,12 +109,12 @@ export class SprintOrchestrator {
     }
     yield this.phaseMarker('dev', 'done');
 
-    // --- QA Phase (with retry loop) ---
+    // --- QA Phase (with retry loop, max MAX_QA_RETRIES rounds) ---
     let currentCode = devOutput;
     for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
       yield this.phaseMarker('qa', 'start');
       let qaOutput = '';
-      for await (const chunk of this.qa.execute(baOutput, currentCode, existingCode)) {
+      for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
         qaOutput += chunk;
         yield chunk;
       }
@@ -130,7 +130,7 @@ export class SprintOrchestrator {
       if (attempt < MAX_QA_RETRIES) {
         yield this.phaseMarker('dev', 'fix');
         let fixOutput = '';
-        for await (const chunk of this.dev.fix(currentCode, qaOutput)) {
+        for await (const chunk of this.dev.fix(currentCode, qaOutput, baOutput, uiuxOutput)) {
           fixOutput += chunk;
           yield chunk;
         }

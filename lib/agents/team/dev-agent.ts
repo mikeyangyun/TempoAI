@@ -25,12 +25,16 @@ export class DevAgent {
     yield* this.llm.streamChat(messages);
   }
 
-  async *fix(code: string, qaFeedback: string): AsyncIterable<string> {
+  async *fix(code: string, qaFeedback: string, baOutput?: string, uiuxOutput?: string): AsyncIterable<string> {
+    let contextSection = '';
+    if (baOutput) contextSection += `\n## BA Requirements (reference)\n${baOutput}\n`;
+    if (uiuxOutput) contextSection += `\n## UI/UX Design Specs (reference)\n${uiuxOutput}\n`;
+
     const messages: LLMMessage[] = [
       { role: 'system', content: PROMPT_DEV },
       {
         role: 'user',
-        content: `The QA engineer found issues with your code. Fix them and output the complete corrected files.\n\n## QA Feedback\n${qaFeedback}\n\n## Current Code\n${code}\n\nOutput the corrected files in the same format.`,
+        content: `The QA engineer found issues with your code. Fix ALL reported issues and output the complete corrected files.\n\n## QA Feedback (FIX EVERY ISSUE LISTED)\n${qaFeedback}${contextSection}\n## Current Code\n${code}\n\nAddress every QA issue. Output the COMPLETE corrected files.`,
       },
     ];
 
