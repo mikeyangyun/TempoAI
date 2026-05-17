@@ -129,9 +129,9 @@ function AssistantMessage({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleImplement = () => {
-    if (onImplementPlan && message.content) {
-      onImplementPlan(`Implement the following plan:\n\n${message.content}`);
+  const handleImplement = (filteredPlan: string) => {
+    if (onImplementPlan) {
+      onImplementPlan(`Implement the following plan:\n\n${filteredPlan}`);
     }
   };
 
@@ -575,33 +575,148 @@ function QuestionCard({ questions, onAnswer, disabled }: QuestionCardProps) {
   );
 }
 
+// --- Plan parsing utilities ---
+
+interface PlanSection {
+  title: string;
+  items: PlanItem[];
+  isOverview?: boolean;
+  isComplexity?: boolean;
+}
+
+interface PlanItem {
+  id: string;
+  text: string;
+  type: 'bullet' | 'numbered' | 'text';
+}
+
+function parsePlanSections(content: string): PlanSection[] {
+  const lines = content.split('\n');
+  const sections: PlanSection[] = [];
+  let current: PlanSection | null = null;
+  let itemIdx = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const headingMatch = trimmed.match(/^##\s+(.+)/);
+    if (headingMatch) {
+      if (current) sections.push(current);
+      const title = headingMatch[1].trim();
+      const isOverview = /overview/i.test(title);
+      const isComplexity = /complexity/i.test(title);
+      current = { title, items: [], isOverview, isComplexity };
+      continue;
+    }
+
+    if (!current) {
+      current = { title: '', items: [] };
+    }
+
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)/);
+    const numberedMatch = trimmed.match(/^\d+\.\s+(.+)/);
+
+    if (bulletMatch) {
+      current.items.push({ id: `item-${itemIdx++}`, text: bulletMatch[1], type: 'bullet' });
+    } else if (numberedMatch) {
+      current.items.push({ id: `item-${itemIdx++}`, text: numberedMatch[1], type: 'numbered' });
+    } else {
+      current.items.push({ id: `item-${itemIdx++}`, text: trimmed, type: 'text' });
+    }
+  }
+  if (current) sections.push(current);
+  return sections;
+}
+
+function reconstructPlanFromSelections(
+  sections: PlanSection[],
+  selectedIds: Set<string>,
+  allSelected: boolean,
+): string {
+  const parts: string[] = [];
+  for (const section of sections) {
+    if (section.isOverview || section.isComplexity) {
+      parts.push(`## ${section.title}`);
+      section.items.forEach(item => parts.push(item.text));
+      parts.push('');
+      continue;
+    }
+    const kept = allSelected
+      ? section.items
+      : section.items.filter(item => item.type === 'text' || selectedIds.has(item.id));
+    if (kept.length === 0) continue;
+    parts.push(`## ${section.title}`);
+    let num = 1;
+    for (const item of kept) {
+      if (item.type === 'numbered') parts.push(`${num++}. ${item.text}`);
+      else if (item.type === 'bullet') parts.push(`- ${item.text}`);
+      else parts.push(item.text);
+    }
+    parts.push('');
+  }
+  return parts.join('\n').trim();
+}
+
 // --- Plan Card ---
 
 interface PlanCardProps {
   content: string;
   isStreaming: boolean;
-  onImplement: () => void;
+  onImplement: (filteredPlan: string) => void;
   showImplement: boolean;
   buildDisabled?: boolean;
 }
 
 function PlanCard({ content, isStreaming, onImplement, showImplement, buildDisabled }: PlanCardProps) {
+  const sections = useMemo(() => parsePlanSections(content), [content]);
+  const selectableItems = useMemo(
+    () => sections.flatMap(s => (s.isOverview || s.isComplexity) ? [] : s.items.filter(i => i.type !== 'text')),
+    [sections],
+  );
+
   const [collapsed, setCollapsed] = useState(false);
   const [implemented, setImplemented] = useState(false);
-  const lineCount = content.split('\n').filter(l => l.trim()).length;
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(selectableItems.map(i => i.id)));
   const isDisabled = implemented || !!buildDisabled;
+
+  const allSelected = selectedIds.size === selectableItems.length;
+  const noneSelected = selectedIds.size === 0;
+
+  const toggleItem = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(selectableItems.map(i => i.id)));
+  };
+
+  const handleBuild = () => {
+    setImplemented(true);
+    const effectiveAll = noneSelected || allSelected;
+    const filtered = reconstructPlanFromSelections(sections, selectedIds, effectiveAll);
+    onImplement(filtered);
+  };
 
   return (
     <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.03] dark:bg-blue-500/[0.06] overflow-hidden">
-      {/* Header - clickable to toggle */}
+      {/* Header */}
       <button
         onClick={() => !isStreaming && setCollapsed(!collapsed)}
         className="flex w-full items-center gap-2 px-4 py-2.5 border-b border-blue-500/10 bg-blue-500/[0.03] text-left hover:bg-blue-500/[0.05] transition-colors"
       >
         <Lightbulb className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
         <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Plan</span>
-        {!isStreaming && (
-          <span className="text-[10px] text-muted-foreground/40 ml-1">{lineCount} lines</span>
+        {!isStreaming && selectableItems.length > 0 && (
+          <span className="text-[10px] text-muted-foreground/40 ml-1">
+            {selectedIds.size}/{selectableItems.length} selected
+          </span>
         )}
         {isStreaming && (
           <div className="ml-auto flex items-center gap-1.5">
@@ -620,30 +735,120 @@ function PlanCard({ content, isStreaming, onImplement, showImplement, buildDisab
         )}
       </button>
 
-      {/* Content - collapsible */}
+      {/* Content - interactive selectable sections */}
       {!collapsed && (
-        <div className="px-4 py-3 text-sm leading-relaxed text-foreground/80 max-h-[300px] overflow-y-auto">
-          <div className="whitespace-pre-wrap">{content}</div>
-          {isStreaming && <StreamingCursor />}
+        <div className="max-h-[400px] overflow-y-auto">
+          {/* Select all toggle */}
+          {!isStreaming && selectableItems.length > 0 && !implemented && (
+            <div className="px-4 pt-2.5 pb-1 border-b border-blue-500/5">
+              <button
+                onClick={toggleAll}
+                className="flex items-center gap-2 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              >
+                <div className={cn(
+                  'flex h-4 w-4 items-center justify-center rounded border transition-all',
+                  allSelected
+                    ? 'bg-blue-600 border-blue-600 dark:bg-blue-500 dark:border-blue-500'
+                    : 'border-muted-foreground/30 bg-transparent',
+                )}>
+                  {allSelected && <Check className="h-3 w-3 text-white" />}
+                </div>
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+          )}
+
+          {sections.map((section, sIdx) => (
+            <div key={sIdx} className="px-4 py-2 first:pt-2.5 last:pb-2.5">
+              {section.title && (
+                <p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">
+                  {section.title}
+                </p>
+              )}
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isSelectable = item.type !== 'text' && !section.isOverview && !section.isComplexity;
+                  const isSelected = selectedIds.has(item.id);
+
+                  if (section.isOverview || section.isComplexity || item.type === 'text') {
+                    return (
+                      <p key={item.id} className="text-sm leading-relaxed text-foreground/70">
+                        {item.text}
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => !implemented && toggleItem(item.id)}
+                      disabled={implemented}
+                      className={cn(
+                        'flex items-start gap-2.5 w-full text-left rounded-lg px-2.5 py-1.5 transition-all group',
+                        implemented
+                          ? 'cursor-default'
+                          : isSelected
+                            ? 'bg-blue-500/[0.06] hover:bg-blue-500/10'
+                            : 'hover:bg-muted/40 opacity-60 hover:opacity-80',
+                      )}
+                    >
+                      <div className={cn(
+                        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all',
+                        isSelected
+                          ? 'bg-blue-600 border-blue-600 dark:bg-blue-500 dark:border-blue-500 shadow-sm shadow-blue-500/20'
+                          : 'border-muted-foreground/25 bg-transparent group-hover:border-muted-foreground/40',
+                      )}>
+                        {isSelected && <Check className="h-3 w-3 text-white" />}
+                      </div>
+                      <span className={cn(
+                        'text-[13px] leading-relaxed',
+                        isSelected ? 'text-foreground/80' : 'text-muted-foreground',
+                      )}>
+                        {item.text}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {isStreaming && (
+            <div className="px-4 pb-3">
+              <StreamingCursor />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Build button - always visible when ready */}
+      {/* Build button with selection summary */}
       {showImplement && (
         <div className="px-4 py-3 border-t border-blue-500/10 bg-gradient-to-r from-blue-500/[0.03] to-violet-500/[0.03]">
-          <button
-            onClick={() => { setImplemented(true); onImplement(); }}
-            disabled={isDisabled}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all',
-              isDisabled
-                ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
-                : 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 hover:scale-[1.02] active:scale-[0.98]'
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBuild}
+              disabled={isDisabled}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all',
+                isDisabled
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
+                  : 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30 hover:scale-[1.02] active:scale-[0.98]',
+              )}
+            >
+              <Rocket className="h-4 w-4" />
+              {isDisabled
+                ? 'Building...'
+                : noneSelected
+                  ? 'Build all'
+                  : allSelected
+                    ? 'Build all'
+                    : `Build ${selectedIds.size} selected`}
+            </button>
+            {!isDisabled && !allSelected && !noneSelected && (
+              <span className="text-[11px] text-muted-foreground/50">
+                {selectableItems.length - selectedIds.size} items excluded
+              </span>
             )}
-          >
-            <Rocket className="h-4 w-4" />
-            {isDisabled ? 'Building...' : 'Build this'}
-          </button>
+          </div>
         </div>
       )}
     </div>
