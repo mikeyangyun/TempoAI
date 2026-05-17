@@ -14,7 +14,7 @@ export type StreamPhase = 'idle' | 'analyzing' | 'routing' | 'writing' | 'valida
 
 export type TeamPhaseInfo = {
   role: TeamRole;
-  status: 'start' | 'done' | 'question' | 'pass' | 'fail' | 'fix';
+  status: 'start' | 'done' | 'question' | 'reject' | 'pass' | 'fail' | 'fix';
   name: string;
   title: string;
 };
@@ -31,6 +31,7 @@ export type TeamProgress = {
   phases: TeamPhaseInfo[];
   activeRole: TeamRole | null;
   baQuestions: string[] | null;
+  baRejection: string | null;
   sprintComplete: boolean;
   roleSegments: RoleSegment[];
 };
@@ -123,10 +124,17 @@ function extractBAQuestions(text: string): string[] | null {
   return match[1].trim().split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
 }
 
+function extractBARejection(text: string): string | null {
+  const match = text.match(/\[BA:REJECT\]([\s\S]*?)(?:\[\/BA:REJECT\]|$)/);
+  if (!match) return null;
+  return match[1].trim();
+}
+
 const INITIAL_TEAM_PROGRESS: TeamProgress = {
   phases: [],
   activeRole: null,
   baQuestions: null,
+  baRejection: null,
   sprintComplete: false,
   roleSegments: [],
 };
@@ -166,6 +174,7 @@ export function parseRoleSegments(raw: string): RoleSegment[] {
       .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
       .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
       .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
+      .replace(/\[BA:REJECT\][\s\S]*?(?:\[\/BA:REJECT\]|$)/g, '')
       .trim();
 
     const existingIdx = segments.findIndex(s => s.role === mk.role && s.status !== 'done');
@@ -330,6 +339,7 @@ export function useChat(): UseChatReturn {
           const currentPhases: TeamPhaseInfo[] = [];
           let latestActiveRole: TeamRole | null = null;
           let detectedQuestions: string[] | null = null;
+          let detectedRejection: string | null = null;
           let sprintDone = false;
 
           while ((teamMatch = teamMarkerRegex.exec(fullContent)) !== null) {
@@ -349,6 +359,9 @@ export function useChat(): UseChatReturn {
             if (info.status === 'question') {
               detectedQuestions = extractBAQuestions(fullContent);
             }
+            if (info.status === 'reject') {
+              detectedRejection = extractBARejection(fullContent);
+            }
           }
 
           if (fullContent.includes('[SPRINT:COMPLETE]')) {
@@ -361,6 +374,7 @@ export function useChat(): UseChatReturn {
             phases: currentPhases,
             activeRole: latestActiveRole,
             baQuestions: detectedQuestions,
+            baRejection: detectedRejection,
             sprintComplete: sprintDone,
             roleSegments,
           });
@@ -382,7 +396,8 @@ export function useChat(): UseChatReturn {
             .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
             .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
             .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '')
-            .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '');
+            .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
+            .replace(/\[BA:REJECT\][\s\S]*?(?:\[\/BA:REJECT\]|$)/g, '');
 
           const { chatText, codeText } = splitStreamContent(cleanContent);
 
@@ -418,7 +433,8 @@ export function useChat(): UseChatReturn {
           .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
           .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
           .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '')
-          .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '');
+          .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
+          .replace(/\[BA:REJECT\][\s\S]*?(?:\[\/BA:REJECT\]|$)/g, '');
 
         let newHtml = currentHtml;
         let result: ParseResult;

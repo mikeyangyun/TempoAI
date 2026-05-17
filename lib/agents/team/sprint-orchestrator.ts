@@ -70,6 +70,11 @@ export class SprintOrchestrator {
       }
     }
 
+    if (this.hasRejection(baOutput)) {
+      yield this.phaseMarker('ba', 'reject');
+      return;
+    }
+
     if (this.hasQuestions(baOutput)) {
       yield this.phaseMarker('ba', 'question');
       return;
@@ -139,6 +144,10 @@ export class SprintOrchestrator {
 
   private hasQuestions(text: string): boolean {
     return text.includes('[QUESTIONS]') && text.includes('[/QUESTIONS]');
+  }
+
+  private hasRejection(text: string): boolean {
+    return text.includes('[BA:REJECT]');
   }
 
   private phaseMarker(role: TeamRole, status: string): string {

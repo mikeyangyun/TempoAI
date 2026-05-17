@@ -22,6 +22,7 @@ import {
   MessageCircleQuestion,
   Send,
   Rocket,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface MessageBubbleProps {
@@ -190,6 +191,11 @@ function AssistantMessage({
               onAnswer={onAnswerBA}
               disabled={!!isStreaming}
             />
+          )}
+
+          {/* BA Rejection Card */}
+          {resolvedTeamProgress.baRejection && (
+            <RejectionCard content={resolvedTeamProgress.baRejection} />
           )}
 
           {/* Waiting indicator when streaming but no segments yet for active role */}
@@ -371,10 +377,17 @@ function rebuildTeamProgress(sprintRaw: string): TeamProgress {
     baQuestions = qMatch[1].trim().split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
   }
 
+  let baRejection: string | null = null;
+  const rMatch = sprintRaw.match(/\[BA:REJECT\]([\s\S]*?)(?:\[\/BA:REJECT\]|$)/);
+  if (rMatch) {
+    baRejection = rMatch[1].trim();
+  }
+
   return {
     phases,
     activeRole: null,
     baQuestions,
+    baRejection,
     sprintComplete,
     roleSegments,
   };
@@ -570,6 +583,60 @@ function QuestionCard({ questions, onAnswer, disabled }: QuestionCardProps) {
             Answer
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Rejection Card (BA deems request too vague) ---
+
+function RejectionCard({ content }: { content: string }) {
+  const lines = content.split('\n').filter(l => l.trim());
+
+  return (
+    <div className="rounded-xl border border-orange-500/20 bg-orange-500/[0.03] dark:bg-orange-500/[0.06] overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-orange-500/10 bg-orange-500/[0.04]">
+        <AlertTriangle className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+        <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">Mike needs more details</span>
+      </div>
+
+      <div className="px-4 py-3 space-y-1.5">
+        {lines.map((line, i) => {
+          const boldMatch = line.match(/^\s*[-*]\s+\*\*(.+?)\*\*\s*(.*)/);
+          if (boldMatch) {
+            return (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-orange-500/60" />
+                <span className="text-foreground/80">
+                  <strong className="text-foreground">{boldMatch[1]}</strong>
+                  {boldMatch[2] && ` ${boldMatch[2]}`}
+                </span>
+              </div>
+            );
+          }
+          const bulletMatch = line.match(/^\s*[-*]\s+(.*)/);
+          if (bulletMatch) {
+            return (
+              <div key={i} className="flex items-start gap-2 text-sm">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-orange-500/60" />
+                <span className="text-foreground/70">{bulletMatch[1]}</span>
+              </div>
+            );
+          }
+          if (line.toLowerCase().startsWith('example:') || line.toLowerCase().startsWith('例如:') || line.toLowerCase().startsWith('例如：')) {
+            return (
+              <div key={i} className="mt-2 rounded-lg bg-orange-500/[0.05] border border-orange-500/10 px-3 py-2">
+                <p className="text-[11px] text-orange-600/70 dark:text-orange-400/70 font-medium mb-0.5">Example</p>
+                <p className="text-sm text-foreground/70 italic">{line.replace(/^(?:example|例如)[：:]\s*/i, '')}</p>
+              </div>
+            );
+          }
+          return <p key={i} className="text-sm text-foreground/70 leading-relaxed">{line}</p>;
+        })}
+      </div>
+
+      <div className="px-4 py-2.5 border-t border-orange-500/10 bg-orange-500/[0.02]">
+        <p className="text-[11px] text-muted-foreground/50">Please re-enter a more specific request in the chat below.</p>
       </div>
     </div>
   );
