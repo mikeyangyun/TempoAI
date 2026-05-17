@@ -8,12 +8,17 @@ export class BAAgent {
 
   constructor(private llm: LLMProvider) {}
 
-  async *execute(userRequest: string, previousContext?: string): AsyncIterable<string> {
+  async *execute(userRequest: string, previousContext?: string, isIteration?: boolean): AsyncIterable<string> {
     const messages: LLMMessage[] = [
       { role: 'system', content: PROMPT_BA },
     ];
 
-    if (previousContext) {
+    if (isIteration && previousContext) {
+      messages.push({
+        role: 'user',
+        content: `This is an ITERATION on an existing app. Previous sprint delivered these features:\n${previousContext}\n\nThe user now wants: ${userRequest}\n\nIMPORTANT: Specify ONLY the changes/additions. Existing features must be preserved.`,
+      });
+    } else if (previousContext) {
       messages.push({
         role: 'user',
         content: `Previous sprint context:\n${previousContext}\n\nNew request: ${userRequest}`,

@@ -46,6 +46,9 @@ export class SprintOrchestrator {
       .map((m) => m.content)
       .join('\n');
 
+    const existingCode = context.currentHtml || null;
+    const isIteration = !!existingCode || !!sprintContext;
+
     const previousContext = sprintContext?.roleOutputs
       ?.map((o) => `[${o.role.toUpperCase()}]: ${o.content}`)
       .join('\n\n');
@@ -61,7 +64,7 @@ export class SprintOrchestrator {
         yield chunk;
       }
     } else {
-      for await (const chunk of this.ba.execute(userRequest, previousContext)) {
+      for await (const chunk of this.ba.execute(userRequest, previousContext, isIteration)) {
         baOutput += chunk;
         yield chunk;
       }
@@ -77,7 +80,7 @@ export class SprintOrchestrator {
     // --- TL Phase ---
     yield this.phaseMarker('tl', 'start');
     let tlOutput = '';
-    for await (const chunk of this.tl.execute(baOutput)) {
+    for await (const chunk of this.tl.execute(baOutput, isIteration)) {
       tlOutput += chunk;
       yield chunk;
     }
@@ -95,7 +98,7 @@ export class SprintOrchestrator {
     // --- Dev Phase ---
     yield this.phaseMarker('dev', 'start');
     let devOutput = '';
-    for await (const chunk of this.dev.execute(baOutput, tlOutput, uiuxOutput)) {
+    for await (const chunk of this.dev.execute(baOutput, tlOutput, uiuxOutput, existingCode)) {
       devOutput += chunk;
       yield chunk;
     }
@@ -106,7 +109,7 @@ export class SprintOrchestrator {
     for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
       yield this.phaseMarker('qa', 'start');
       let qaOutput = '';
-      for await (const chunk of this.qa.execute(baOutput, currentCode)) {
+      for await (const chunk of this.qa.execute(baOutput, currentCode, existingCode)) {
         qaOutput += chunk;
         yield chunk;
       }

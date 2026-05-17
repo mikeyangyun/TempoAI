@@ -8,13 +8,18 @@ export class DevAgent {
 
   constructor(private llm: LLMProvider) {}
 
-  async *execute(baOutput: string, tlOutput: string, uiuxOutput: string): AsyncIterable<string> {
+  async *execute(baOutput: string, tlOutput: string, uiuxOutput: string, existingCode?: string | null): AsyncIterable<string> {
+    let userContent: string;
+
+    if (existingCode) {
+      userContent = `ITERATION: Modify the existing application. You MUST keep ALL existing features working.\n\n## Current Code\n${existingCode}\n\n## Changes Requested (BA)\n${baOutput}\n\n## Tech Notes (TL)\n${tlOutput}\n\n## Design Updates (UI/UX)\n${uiuxOutput}\n\nOutput the COMPLETE updated files. Do not remove any existing functionality.`;
+    } else {
+      userContent = `Build the application based on these team specs:\n\n## BA Requirements\n${baOutput}\n\n## Tech Architecture\n${tlOutput}\n\n## UI/UX Design\n${uiuxOutput}\n\nImplement the complete application now.`;
+    }
+
     const messages: LLMMessage[] = [
       { role: 'system', content: PROMPT_DEV },
-      {
-        role: 'user',
-        content: `Build the application based on these team specs:\n\n## BA Requirements\n${baOutput}\n\n## Tech Architecture\n${tlOutput}\n\n## UI/UX Design\n${uiuxOutput}\n\nImplement the complete application now.`,
-      },
+      { role: 'user', content: userContent },
     ];
 
     yield* this.llm.streamChat(messages);

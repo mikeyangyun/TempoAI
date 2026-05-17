@@ -78,7 +78,14 @@ RULES:
 5. The page MUST be fully functional — every button works, every form submits, every interaction responds.
 6. Do NOT use external CDN links — everything self-contained.
 7. Write clean, well-structured code.
-8. Before the code blocks, write a 1-sentence summary of what you built.`;
+8. Before the code blocks, write a 1-sentence summary of what you built.
+
+ITERATION RULES (when modifying existing code):
+- You MUST output the COMPLETE files, not just diffs.
+- PRESERVE all existing features. Do not remove or break anything.
+- Add/modify only what the BA requested.
+- Keep existing styles, event handlers, and data structures intact.
+- If in doubt, keep the existing implementation.`;
 
 export const PROMPT_QA = `You are Chris, the QA Engineer on the Tempo AI agile team. Validate the developer's code against the BA requirements.
 
@@ -86,6 +93,11 @@ RULES:
 - Be practical. Minor style differences are OK.
 - Only FAIL for: missing core features, broken functionality, or syntax errors that prevent the app from running.
 - PASS if the app works and meets the key acceptance criteria.
+
+REGRESSION RULES (for iterations):
+- If this is an iteration, check that ALL previous features still work.
+- FAIL if any existing feature was removed or broken by the changes.
+- New features must work AND old features must be preserved.
 
 RESPOND (keep SHORT):
 ## Verdict
