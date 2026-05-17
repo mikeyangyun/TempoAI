@@ -1,14 +1,112 @@
 # Tempo AI
 
-An AI-powered application generator that turns natural language into live, interactive web applications — inspired by [v0.dev](https://v0.dev) and [bolt.new](https://bolt.new).
+An AI-powered application generator built as an **Agile Development Team simulation**. Describe what you want in natural language — a team of five AI agents (BA, Tech Lead, UI/UX Designer, Developer, QA Engineer) collaborates through a sprint to deliver a working web application in real time.
 
-> **Status**: Prototype complete — all core phases (0–8) implemented and verified.
+Live demo: [tempo-ai-one.vercel.app](https://tempo-ai-one.vercel.app)
 
 ---
 
-## Vision
+## Design Philosophy
 
-Describe what you want in plain English. Tempo AI generates a fully functional web page and renders it in a live preview you can click, type into, and interact with — all in real time. Then keep talking to refine it: _"make the button red"_, _"add a dark mode toggle"_, _"put a navbar on top"_.
+**"An AI team, not an AI tool."**
+
+Most AI code generators treat the LLM as a single black box: user sends prompt, model returns code. Tempo AI reimagines this as a **multi-agent agile team** where each role has distinct expertise, structured handoffs, and a QA feedback loop — mirroring how real software teams operate.
+
+Core design principles:
+1. **Separation of concerns** — each agent (BA, TL, UI/UX, Dev, QA) owns one responsibility
+2. **Quality through iteration** — QA validates against requirements and design specs; Dev fixes issues in up to 3 retry rounds
+3. **Transparency** — the entire team's thinking process is visible in the chat as collapsible role cards
+4. **Progressive engagement** — the UI is fully explorable before sign-in; authentication only triggers on action
+
+---
+
+## Architecture Overview
+
+### System Flow
+
+```
+User Input (natural language)
+     │
+     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Mode Router                                │
+│              plan mode │ build mode                           │
+└────────┬──────────────┴──────────────┬──────────────────────┘
+         │                             │
+         ▼                             ▼
+┌─────────────────┐    ┌──────────────────────────────────────┐
+│  PlannerAgent   │    │         Sprint Orchestrator           │
+│                 │    │                                       │
+│ Structured plan │    │  ┌─────┐  ┌────┐  ┌──────┐          │
+│ with selectable │    │  │ BA  │─▶│ TL │─▶│UI/UX │          │
+│ bullet points   │    │  └──┬──┘  └────┘  └──┬───┘          │
+│                 │    │     │ reject?         │              │
+│  [Build this]   │    │     │ question?       ▼              │
+│  (user selects  │    │     │          ┌──────────┐          │
+│   items to      │    │     │          │   Dev    │          │
+│   implement)    │    │     │          └────┬─────┘          │
+└─────────────────┘    │     │               │                │
+                       │     │               ▼                │
+                       │     │          ┌─────────┐           │
+                       │     │          │   QA    │           │
+                       │     │          └────┬────┘           │
+                       │     │    ┌──────────┤               │
+                       │     │    │ FAIL     │ PASS           │
+                       │     │    │ (max 3x) │                │
+                       │     │    ▼          ▼                │
+                       │     │  Dev fix    MVP Shipped        │
+                       └─────┴────────────────────────────────┘
+                                       │
+                                       ▼
+                              ┌─────────────────┐
+                              │  Live Preview    │
+                              │  (iframe srcDoc) │
+                              └─────────────────┘
+```
+
+### Agent Roles
+
+| Agent | Name | Responsibility |
+|-------|------|----------------|
+| **BA** (Business Analyst) | Mike | Assesses request clarity (clear / vague / too vague), produces spec with features and acceptance criteria, or asks clarifying questions |
+| **TL** (Tech Lead) | Sarah | Defines architecture, file structure, state management strategy, and build order |
+| **UI/UX** (Designer) | Alex | Specifies colors, typography, layout, spacing, and interaction patterns with concrete values |
+| **Dev** (Developer) | Jordan | Implements the full application as multi-file output (HTML + CSS + JS), handles iterations preserving existing features |
+| **QA** (Engineer) | Chris | Validates against BA's acceptance criteria AND UI/UX design specs; fails with itemized issues for Dev to fix |
+
+### BA Intelligence
+
+The BA classifies every incoming request into one of three categories:
+
+- **Category A (Clear)** — specific enough to build immediately → outputs spec, sprint proceeds
+- **Category B (Vague but workable)** — has intent but missing details → asks 2-4 clarifying questions, pauses sprint
+- **Category C (Too vague)** — nonsensical or not actionable → rejects with helpful suggestions, sprint stops
+
+This prevents the team from wasting effort on unclear requirements.
+
+### QA-Dev Feedback Loop
+
+```
+Dev writes code
+      │
+      ▼
+QA validates against:
+  ✓ BA acceptance criteria
+  ✓ UI/UX design specs
+  ✓ Code functionality
+  ✓ Regression (iterations)
+      │
+      ├─── PASS → Ship MVP
+      │
+      └─── FAIL (itemized issues)
+              │
+              ▼
+         Dev fixes ALL issues
+         (with full BA + UI/UX context)
+              │
+              └──→ QA re-validates
+                   (up to 3 retry rounds)
+```
 
 ---
 
@@ -24,7 +122,7 @@ pnpm install
 
 # 2. Configure environment
 cp .env.example .env.local
-# Edit .env.local — add your OpenRouter API key
+# Add your LLM API key and Clerk keys (see below)
 
 # 3. Run development server
 pnpm dev
@@ -38,80 +136,40 @@ pnpm build && pnpm start
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENROUTER_API_KEY` | Yes | Your [OpenRouter](https://openrouter.ai/) API key |
-| `OPENROUTER_MODEL` | No | Model identifier (default: `openai/gpt-4o-mini`) |
+| `DEEPSEEK_API_KEY` | One of three | [DeepSeek](https://platform.deepseek.com/) API key (preferred) |
+| `ANTHROPIC_API_KEY` | One of three | [Anthropic](https://console.anthropic.com/) API key |
+| `OPENROUTER_API_KEY` | One of three | [OpenRouter](https://openrouter.ai/) API key (fallback) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | [Clerk](https://clerk.com/) publishable key |
+| `CLERK_SECRET_KEY` | Yes | Clerk secret key |
+
+LLM provider priority: DeepSeek → Anthropic → OpenRouter (first available key wins).
 
 ---
 
-## Core Features
+## Features
 
-### Implemented
+### Core
+- **Multi-Agent Sprint Development** — five AI agents collaborate through a structured sprint pipeline
+- **Plan Mode** — AI generates a structured plan with selectable bullet points; user chooses what to build
+- **Build Mode** — full agile sprint: BA → TL → UI/UX → Dev → QA with live streaming
+- **Interactive Preview** — sandboxed iframe rendering with URL bar, device width toggles, and code/file views
+- **Iterative Refinement** — subsequent sprints preserve existing code; Dev modifies incrementally, QA regression-tests
 
-- **Natural Language → Live App**: Describe your app in plain English, get a working interactive web page
-- **Real-Time Streaming**: Token-by-token generation with live code preview during generation
-- **Interactive Preview**: Sandboxed iframe with full interactivity (clicks, forms, scripts)
-- **Iterative Refinement**: Keep chatting to modify the app — "add dark mode", "make the header sticky"
-- **Version History**: Every generation creates a version snapshot; browse and restore any past version
-- **Project Persistence**: Projects, conversations, and code survive page refresh (localStorage + IndexedDB)
-- **Dark/Light Theme**: System-aware with manual toggle via header button
-- **Prompt Suggestions**: Empty state shows 6 ready-to-use prompt cards for quick start
-- **Keyboard Shortcuts**: `⌘K` (new chat), `Esc` (stop generation), `/` (focus input)
-- **Responsive Layout**: Desktop split-pane; mobile tab-based interface
-- **Error Handling**: Toast notifications with retry action; graceful error display
-- **Download**: Export generated HTML as a downloadable file
+### UX
+- **Progressive Authentication** — UI fully explorable; Clerk sign-in modal triggers only on action
+- **V0-Style Landing Page** — branded homepage with prompt suggestions, AI introduction, and mode toggles
+- **Collapsible Team Cards** — each agent's thinking is shown as an expandable card in the chat stream
+- **Sprint Summary** — professional work report after each sprint: what was built, features delivered, next steps
+- **Branded Generation Splash** — animated Tempo AI screen during code generation instead of raw code
+- **Intelligent Auto-Scroll** — chat scrolls during streaming but respects user scroll-up
 
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Browser                              │
-│                                                              │
-│  ┌──────────────┐  resize  ┌───────────────────────────────┐│
-│  │  Chat Panel   │◄───────►│       Preview Panel            ││
-│  │              │          │                               ││
-│  │ • Messages   │          │ ┌───────────────────────────┐ ││
-│  │ • Streaming  │  inject  │ │  <iframe> / PreviewEngine │ ││
-│  │ • Input bar  │─────────►│ │  srcDoc = generated HTML  │ ││
-│  │ • Stop/Send  │  html    │ │  (sandboxed, swappable)   │ ││
-│  │              │          │ └───────────────────────────┘ ││
-│  └──────┬───────┘          │ Toolbar: Reload │ New Tab     ││
-│         │                  │  Version History │ Download    ││
-│         │ POST /api/chat   └───────────────────────────────┘│
-└─────────┼───────────────────────────────────────────────────┘
-          │
-┌─────────▼───────────────────────────────────────────────────┐
-│              Next.js Server — Agent Orchestration             │
-│                                                              │
-│  ┌────────────┐    ┌──────────────┐    ┌─────────────────┐  │
-│  │Orchestrator│───►│ CodeGenerator│    │  CodeModifier   │  │
-│  │ (router)   │───►│    Agent     │    │    Agent        │  │
-│  └────────────┘    └──────┬───────┘    └───────┬─────────┘  │
-│                           │                    │             │
-│         ┌─────────────────▼────────────────────▼──────┐     │
-│         │            LLM Provider (interface)          │     │
-│         │  Current: OpenRouter (OpenAI-compatible)     │     │
-│         │  Swappable: OpenAI / Anthropic / Local LLM   │     │
-│         └─────────────────────────────────────────────┘     │
-│                                                              │
-│  • API Key server-side only (never in browser bundle)        │
-│  • Streams tokens back to browser via chunked response       │
-│  • System prompt enforces ```html``` fenced output           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| **Agent Orchestration layer** | Code is structured as `Orchestrator → Agent` pipeline. Adding new agents (Planner, Reviewer, Deployer) requires only a new file. |
-| **Interface-driven extensibility** | Core layers (`LLMProvider`, `PreviewEngine`, `StorageAdapter`, `BaseAgent`) are defined as interfaces. Upgrading any layer is a swap, not a rewrite. |
-| **Single-file HTML generation** | Lowest integration cost; reliable parsing; real interactivity in iframe. The `PreviewEngine` interface allows future swap to Sandpack or WebContainers. |
-| **Server-side LLM calls only** | API keys never reach the browser. The Next.js Route Handler acts as a secure proxy. |
-| **Fenced code contract** | The system prompt instructs the model to output exactly one ` ```html ``` ` block. The parser extracts that fence; failures surface a user-friendly error. |
-| **iframe with sandbox** | Generated HTML is treated as untrusted code. `sandbox` attributes allow scripts/forms while isolating the origin. |
-| **localStorage + IndexedDB** | Project metadata in localStorage; large HTML payloads in IndexedDB. The `StorageAdapter` interface allows upgrading to any backend. |
+### Infrastructure
+- **Version History** — every generation creates a snapshot; browse and restore past versions
+- **Project Persistence** — projects, conversations, and code survive refresh (localStorage + IndexedDB)
+- **Multi-File Code Generation** — outputs `index.html`, `style.css`, `script.js` with file tree browser
+- **Dark/Light Theme** — system-aware with manual toggle
+- **Responsive Layout** — desktop split-pane with draggable divider; mobile tab-based layout
+- **Keyboard Shortcuts** — `⌘K` (new chat), `Esc` (stop), `/` (focus input)
 
 ---
 
@@ -122,11 +180,13 @@ pnpm build && pnpm start
 | Framework | [Next.js 16](https://nextjs.org/) (App Router, Turbopack) |
 | Language | TypeScript (strict) |
 | Styling | [Tailwind CSS 4](https://tailwindcss.com/) |
-| Components | [shadcn/ui](https://ui.shadcn.com/) (v4, base-ui) |
-| LLM Gateway | [OpenRouter](https://openrouter.ai/) (OpenAI-compatible) |
+| Components | [shadcn/ui v4](https://ui.shadcn.com/) (base-ui) |
+| Auth | [Clerk](https://clerk.com/) (modal-based, progressive gating) |
+| Icons | [Lucide React](https://lucide.dev/) |
+| LLM | DeepSeek / Anthropic / OpenRouter (pluggable) |
 | Preview | `<iframe srcDoc>` with configurable `sandbox` |
 | Persistence | localStorage + IndexedDB |
-| Package Manager | pnpm |
+| Deployment | [Vercel](https://vercel.com/) |
 
 ---
 
@@ -135,108 +195,152 @@ pnpm build && pnpm start
 ```
 TempoAI/
 ├── app/
-│   ├── page.tsx                 # Main page — responsive split-pane layout
-│   ├── layout.tsx               # Root layout, theme + toast providers
-│   ├── globals.css              # Tailwind + shadcn CSS variables (light/dark)
-│   └── api/chat/route.ts        # POST — streaming LLM proxy via Orchestrator
+│   ├── page.tsx                  # Main page — Clerk-gated workspace with split layout
+│   ├── layout.tsx                # Root layout — Clerk, theme, and toast providers
+│   ├── globals.css               # Tailwind + custom animations (shimmer, float, progress)
+│   └── api/chat/route.ts         # POST — routes to PlannerAgent or SprintOrchestrator
+│
 ├── components/
-│   ├── ChatPanel.tsx            # Message list + empty state + input
-│   ├── ChatInput.tsx            # Textarea, send/stop controls
-│   ├── MessageBubble.tsx        # Single message rendering + streaming
-│   ├── PreviewPanel.tsx         # Preview engine wrapper (iframe + code view)
-│   ├── EmptyState.tsx           # Prompt suggestion cards
-│   ├── Sidebar.tsx              # Project list / history
-│   ├── VersionTimeline.tsx      # Version snapshot browser + restore
-│   ├── MobileLayout.tsx         # Tab-based layout for mobile
-│   ├── ResizablePanel.tsx       # Draggable split-pane
-│   ├── Toast.tsx                # Toast notification system
-│   ├── ThemeProvider.tsx        # next-themes wrapper
-│   ├── ThemeToggle.tsx          # Dark/light toggle button
-│   └── ui/                      # shadcn/ui primitives
+│   ├── ChatPanel.tsx             # Message list + scroll management + plan implementation
+│   ├── ChatInput.tsx             # Textarea with Plan/Build mode toggles and send button
+│   ├── MessageBubble.tsx         # Rich message rendering — role cards, plan card, QA card, etc.
+│   ├── PreviewPanel.tsx          # Iframe preview + code view + file tree + generation splash
+│   ├── HomePage.tsx              # V0-style landing page with prompt suggestions
+│   ├── TempoLogo.tsx             # Animated brand logo
+│   ├── UserMenu.tsx              # Clerk sign-in/sign-up buttons and user avatar
+│   ├── Sidebar.tsx               # Project history list with search
+│   ├── EmptyState.tsx            # Prompt suggestion cards for new conversations
+│   ├── ResizablePanel.tsx        # Draggable split-pane divider
+│   ├── VersionTimeline.tsx       # Version snapshot browser with restore
+│   ├── MobileLayout.tsx          # Tab-based layout for small screens
+│   ├── Toast.tsx                 # Notification system
+│   ├── ThemeProvider.tsx         # next-themes wrapper
+│   └── ThemeToggle.tsx           # Dark/light toggle
+│
 ├── hooks/
-│   ├── useChat.ts               # Chat state, streaming, versions, persistence
-│   ├── useKeyboardShortcuts.ts  # Global keyboard shortcuts
-│   └── useMediaQuery.ts         # Responsive breakpoint detection
+│   ├── useChat.ts                # Core state — streaming, parsing, team progress, persistence
+│   ├── useKeyboardShortcuts.ts   # Global keyboard shortcuts
+│   ├── useMediaQuery.ts          # Responsive breakpoint detection
+│   └── useMounted.ts             # SSR hydration helper
+│
 ├── lib/
 │   ├── agents/
-│   │   ├── types.ts             # BaseAgent interface
-│   │   ├── orchestrator.ts      # Routes to CodeGenerator or CodeModifier
-│   │   ├── code-generator.ts    # Generates HTML from natural language
-│   │   └── code-modifier.ts     # Iteratively modifies existing HTML
+│   │   ├── orchestrator.ts       # Routes plan mode to PlannerAgent, build mode to code agents
+│   │   ├── code-generator.ts     # Single-agent code generation
+│   │   ├── code-modifier.ts      # Single-agent iterative code modification
+│   │   ├── planner.ts            # Structured plan generation (Plan mode)
+│   │   ├── validator.ts          # Code validation agent
+│   │   ├── types.ts              # BaseAgent interface
+│   │   └── team/
+│   │       ├── sprint-orchestrator.ts  # Multi-agent pipeline: BA → TL → UI/UX → Dev → QA
+│   │       ├── ba-agent.ts             # Business Analyst (clarity assessment + spec)
+│   │       ├── tl-agent.ts             # Tech Lead (architecture)
+│   │       ├── uiux-agent.ts           # UI/UX Designer (visual spec)
+│   │       ├── dev-agent.ts            # Developer (code implementation + fix)
+│   │       ├── qa-agent.ts             # QA Engineer (validation + regression)
+│   │       └── prompts.ts              # All team agent system prompts
 │   ├── llm/
-│   │   ├── types.ts             # LLMProvider interface
-│   │   ├── openrouter.ts        # OpenRouter streaming implementation
-│   │   └── prompts.ts           # System prompt definitions
-│   ├── preview/
-│   │   ├── types.ts             # PreviewEngine interface
-│   │   └── iframe-engine.ts     # iframe srcDoc implementation
+│   │   ├── index.ts              # Provider factory (DeepSeek > Anthropic > OpenRouter)
+│   │   ├── deepseek.ts           # DeepSeek streaming implementation
+│   │   ├── anthropic.ts          # Anthropic Messages API streaming
+│   │   ├── openrouter.ts         # OpenRouter streaming (OpenAI-compatible)
+│   │   ├── prompts.ts            # System prompts for single-agent flows
+│   │   └── types.ts              # LLMProvider interface + LLMMessage type
+│   ├── parser.ts                 # Multi-file fence parser + HTML merger for iframe
 │   ├── storage/
-│   │   ├── types.ts             # StorageAdapter interface
-│   │   ├── local-storage.ts     # localStorage for metadata
-│   │   ├── indexed-db.ts        # IndexedDB for large HTML payloads
-│   │   └── index.ts             # StorageFacade combining both
-│   ├── parser.ts                # HTML fence extractor (streaming + complete)
-│   └── utils.ts                 # cn() helper
-├── types/index.ts               # Shared TypeScript types
+│   │   ├── index.ts              # Storage facade (localStorage + IndexedDB)
+│   │   ├── local-storage.ts      # Metadata persistence
+│   │   ├── indexed-db.ts         # Large payload persistence
+│   │   └── types.ts              # StorageAdapter interface
+│   ├── preview/
+│   │   ├── iframe-engine.ts      # iframe srcDoc preview implementation
+│   │   └── types.ts              # PreviewEngine interface
+│   └── utils.ts                  # cn() class merge helper
+│
+├── types/index.ts                # Shared domain types
+├── proxy.ts                      # Clerk middleware — progressive API gating
 ├── docs/
-│   ├── PROTOTYPE_BLUEPRINT.md   # Scope and requirements
-│   ├── DESIGN_NOTES.md          # Trade-offs, status, future roadmap
-│   └── EXECUTION_PLAN.md        # Step-by-step development guide
-├── .env.example                 # Required env vars (no secrets)
-├── package.json
-├── tsconfig.json
-└── next.config.ts
+│   └── DESIGN_NOTES.md           # Trade-offs, completion status, and future roadmap
+└── [config files]                # next.config.ts, tsconfig.json, etc.
 ```
 
 ---
 
-## Development Phases
+## Key Module Design
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 0 | Project scaffolding — Next.js + Tailwind + shadcn/ui + env | **Done** |
-| 1 | Core layout — split-pane Chat + Preview | **Done** |
-| 2 | LLM integration — OpenRouter streaming + HTML parser | **Done** |
-| 3 | Chat interaction — frontend streaming + message UI | **Done** |
-| 4 | Preview engine — iframe rendering + toolbar | **Done** |
-| 5 | Persistence — localStorage + IndexedDB + project history | **Done** |
-| 6 | UX polish — empty states, loading, errors, shortcuts | **Done** |
-| 7 | Innovation — iterative modification + version snapshots | **Done** |
-| 8 | Documentation & delivery — final README, .env.example, cleanup | **Done** |
-| 9 | Buffer enhancements — prompt templates, Monaco, sharing, export | Pending |
+### Sprint Orchestrator (`lib/agents/team/sprint-orchestrator.ts`)
 
----
+The central coordination engine. It chains agents sequentially via async generators, streaming each agent's output token-by-token to the frontend. Phase markers (`[TEAM:role:status:name:title]`) are embedded in the stream so the frontend can update the UI in real time without polling.
 
-## Demo Workflow
+Key design decisions:
+- **Async generator pattern** — each agent `yield*`s chunks, enabling true token-level streaming through the entire pipeline
+- **BA gating** — the orchestrator checks BA output for `[BA:REJECT]` or `[QUESTIONS]` markers and halts the sprint early, avoiding wasted LLM calls
+- **Context threading** — BA output feeds into TL and UI/UX; all three feed into Dev; BA + UI/UX + Dev code feed into QA
+- **QA retry loop** — on failure, QA's itemized feedback plus original BA/UI/UX specs are sent back to Dev for targeted fixes
 
-1. Open `http://localhost:3000` — you'll see prompt suggestion cards
-2. Click **"Todo App"** or type your own description
-3. Watch the AI stream code in real time (code view visible in the preview panel)
-4. When generation completes, the live interactive app appears in the preview iframe
-5. Type a follow-up: _"add a dark mode toggle"_ — the app updates iteratively
-6. Click the version dropdown (`v1/2`) in the preview toolbar to restore any past version
-7. Start a new chat with `⌘K`, or browse project history in the sidebar
+### Streaming Content Parser (`hooks/useChat.ts`)
+
+The `useChat` hook manages the complex state of parsing a single interleaved stream into structured UI state. The stream contains natural language text, code blocks, and control markers — all mixed together.
+
+Key parsing responsibilities:
+- **Phase marker detection** — `[TEAM:ba:start:Mike:Business Analyst]` markers update the `teamProgress` state
+- **Role segment extraction** — `parseRoleSegments()` splits raw stream content into per-role segments for rendering as collapsible cards
+- **BA special handling** — detects `[QUESTIONS]...[/QUESTIONS]` and `[BA:REJECT]...[/BA:REJECT]` to trigger interactive UI
+- **Code extraction** — strips markers, splits chat text from code blocks, feeds code into the multi-file parser
+- **Sprint context persistence** — `sprintContextRef` carries role outputs across sprints for iteration context
+
+### Multi-File Parser (`lib/parser.ts`)
+
+Handles two output formats:
+1. **Multi-file** — ` ```language:filename ` blocks (e.g., ` ```css:style.css `) extracted into a `FileMap`
+2. **Legacy single-file** — ` ```html ` block extracted as a single HTML string
+
+The `mergeFilesToHtml()` function reassembles multi-file output into a single HTML document for iframe rendering, automatically linking CSS via `<style>` and JS via `<script>` tags.
+
+### Message Bubble System (`components/MessageBubble.tsx`)
+
+The most complex UI component, rendering different message types:
+- **Team Sprint** — collapsible `RoleCard` per agent, `QuestionCard` for BA questions, `RejectionCard` for vague requests, `SprintSummaryCard` on completion
+- **Plan Mode** — `PlanCard` with selectable checkboxes per plan item, select-all toggle, and contextual "Build N selected" button
+- **Legacy Agent** — `ThinkingSteps` timeline showing analyze → route → write → validate → fix phases
+- **Historical reconstruction** — `rebuildTeamProgress()` reconstructs team progress from persisted `sprintRaw` for messages loaded from storage
+
+### LLM Provider Layer (`lib/llm/`)
+
+Interface-driven design allowing hot-swapping between providers:
+- `LLMProvider.streamChat()` returns `AsyncIterable<string>` — all providers share the same contract
+- `createLLMProvider()` factory auto-selects based on which API key is present
+- Each provider handles its own API format (Anthropic Messages API vs OpenAI-compatible for DeepSeek/OpenRouter)
 
 ---
 
 ## Data Model
 
 ```typescript
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;          // Clean display text
+  timestamp: number;
+  rawContent?: string;      // Full raw LLM output (with code blocks)
+  agentName?: string;       // Which agent/mode produced this message
+  sprintRaw?: string;       // Full sprint stream for historical reconstruction
+};
+
 type Project = {
   id: string;
   title: string;
   messages: ChatMessage[];
   currentHtml: string | null;
-  versions: { html: string; timestamp: number }[];
+  versions: ProjectVersion[];
   createdAt: number;
   updatedAt: number;
 };
 
-type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
+type SprintContext = {
+  roleOutputs: SprintRoleOutput[];  // Each role's output from previous sprint
+  userAnswers?: string[];           // BA question answers
+  sprintNumber: number;
 };
 ```
 
@@ -244,40 +348,14 @@ type ChatMessage = {
 
 ## Security
 
-This is a **prototype / local demo**. Generated HTML is executed inside a sandboxed iframe, but this does **not** provide production-grade isolation.
+This is a **prototype**. Production deployment would require additional hardening.
 
-| Concern | Prototype Stance |
+| Concern | Current Approach |
 |---------|-----------------|
-| Generated code execution | `<iframe sandbox="allow-scripts allow-forms">` — scripts run, but origin is isolated |
-| API key exposure | Server-side only; never in browser bundle or `NEXT_PUBLIC_*` |
-| XSS from generated content | Contained within iframe sandbox; not equivalent to a separate-origin deployment |
-| Production readiness | Would require: separate origin for preview, strict CSP, content security review |
-
----
-
-## Known Limitations
-
-- **Single-file HTML only**: Generated apps are self-contained HTML documents; multi-file React/Vue projects are not supported
-- **No npm packages in generated code**: Apps can use CDN-linked libraries (included via `<script>` tags in generated HTML) but not `import` statements
-- **No real-time collaboration**: Single-user, local-only persistence
-- **Model-dependent quality**: Output quality depends on the chosen LLM model; `gpt-4o-mini` is fast but less capable than `gpt-4o` or `claude-3.5-sonnet`
-- **No deployment**: Generated apps run locally in iframe; no one-click deploy to hosting
-- **localStorage limits**: Browser storage limits apply (~5-10MB); very large projects may need manual cleanup
-
----
-
-## Architecture Evolution
-
-| Current (Prototype) | Future (Production) |
-|---------------------|---------------------|
-| iframe + srcDoc | WebContainers or server-side Docker sandbox |
-| Single agent (CodeGenerator / CodeModifier) | Multi-agent pipeline (Planner → Coder → Reviewer → Deployer) |
-| localStorage + IndexedDB | PostgreSQL + Redis + cloud sync |
-| No auth | OAuth + multi-tenancy + RBAC |
-| URL hash sharing | Custom domain deployment (Vercel/Cloudflare API) |
-| Single model via OpenRouter | Model comparison, A/B testing, fine-tuned models |
-
-For detailed reasoning, trade-offs, and a prioritized extension roadmap, see **[`docs/DESIGN_NOTES.md`](docs/DESIGN_NOTES.md)**.
+| API keys | Server-side only via Route Handler; never in browser bundle |
+| Generated code | Sandboxed iframe (`allow-scripts allow-forms`); isolated origin |
+| Authentication | Clerk middleware gates `/api/chat`; frontend uses progressive modal gating |
+| Production gaps | Would need: separate-origin preview, strict CSP, rate limiting, abuse detection |
 
 ---
 
