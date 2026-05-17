@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { ChatMessage } from '@/types';
-import { StreamPhase, TeamProgress, RoleSegment, TeamPhaseInfo, parseRoleSegments } from '@/hooks/useChat';
+import { StreamPhase, TeamProgress, RoleSegment, TeamPhaseInfo, BAQuestion, parseRoleSegments } from '@/hooks/useChat';
 import {
   Check,
   ChevronRight,
@@ -371,10 +371,21 @@ function rebuildTeamProgress(sprintRaw: string): TeamProgress {
   const roleSegments = parseRoleSegments(sprintRaw);
   const sprintComplete = sprintRaw.includes('[SPRINT:COMPLETE]');
 
-  let baQuestions: string[] | null = null;
+  let baQuestions: BAQuestion[] | null = null;
   const qMatch = sprintRaw.match(/\[QUESTIONS\]([\s\S]*?)\[\/QUESTIONS\]/);
   if (qMatch) {
-    baQuestions = qMatch[1].trim().split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+    const lines = qMatch[1].trim().split('\n').filter(Boolean);
+    baQuestions = lines.map(line => {
+      const cleaned = line.replace(/^\d+\.\s*/, '').trim();
+      const optionRegex = /\[([A-Z])\]\s*([^[]*?)(?=\s*\[[A-Z]\]|$)/g;
+      const options: { key: string; label: string }[] = [];
+      let optMatch;
+      while ((optMatch = optionRegex.exec(cleaned)) !== null) {
+        options.push({ key: optMatch[1], label: optMatch[2].trim() });
+      }
+      const questionText = cleaned.replace(/\s*\[[A-Z]\]\s*[^[]*?(?=\s*\[[A-Z]\]|$)/g, '').trim();
+      return { text: questionText, options };
+    }).filter(q => q.text);
   }
 
   let baRejection: string | null = null;
@@ -528,61 +539,127 @@ function SprintSummaryCard({ roleSegments }: SprintSummaryCardProps) {
   );
 }
 
-// --- Question Card (BA asks the user) ---
+// --- Question Card (BA asks the user with clickable options) ---
 
 interface QuestionCardProps {
-  questions: string[];
+  questions: BAQuestion[];
   onAnswer?: (answer: string) => void;
   disabled: boolean;
 }
 
 function QuestionCard({ questions, onAnswer, disabled }: QuestionCardProps) {
-  const [answer, setAnswer] = useState('');
+  const [selections, setSelections] = useState<Record<number, string>>({});
+  const [freeText, setFreeText] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  const selectOption = (qIdx: number, key: string) => {
+    if (submitted) return;
+    setSelections(prev => ({ ...prev, [qIdx]: prev[qIdx] === key ? '' : key }));
+  };
 
   const handleSubmit = () => {
-    if (!answer.trim() || !onAnswer) return;
-    onAnswer(answer.trim());
-    setAnswer('');
+    if (!onAnswer || submitted) return;
+    const parts: string[] = [];
+    questions.forEach((q, i) => {
+      const sel = selections[i];
+      if (sel) {
+        const opt = q.options.find(o => o.key === sel);
+        parts.push(`${q.text} → ${sel}: ${opt?.label || sel}`);
+      }
+    });
+    if (freeText.trim()) parts.push(`Additional: ${freeText.trim()}`);
+    if (parts.length === 0) return;
+    setSubmitted(true);
+    onAnswer(parts.join('\n'));
   };
+
+  const hasAnySelection = Object.values(selections).some(v => v) || freeText.trim();
 
   return (
     <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] dark:bg-amber-500/[0.06] overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-500/10 bg-amber-500/[0.04]">
         <MessageCircleQuestion className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-        <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Mike has questions for you</span>
+        <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Mike wants to confirm a few things</span>
       </div>
 
-      <div className="px-4 py-3 space-y-2">
-        {questions.map((q, i) => (
-          <div key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-            <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/10 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-              {i + 1}
-            </span>
-            <span className="leading-relaxed">{q}</span>
+      <div className="px-4 py-3 space-y-4">
+        {questions.map((q, qIdx) => (
+          <div key={qIdx}>
+            <div className="flex items-start gap-2 text-sm text-foreground/80 mb-2">
+              <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/10 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                {qIdx + 1}
+              </span>
+              <span className="leading-relaxed font-medium">{q.text}</span>
+            </div>
+            {q.options.length > 0 && (
+              <div className="ml-7 flex flex-wrap gap-1.5">
+                {q.options.map((opt) => {
+                  const isSelected = selections[qIdx] === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => selectOption(qIdx, opt.key)}
+                      disabled={disabled || submitted}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all border',
+                        submitted && !isSelected
+                          ? 'opacity-40 cursor-default border-transparent bg-muted/30 text-muted-foreground'
+                          : isSelected
+                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300 shadow-sm shadow-amber-500/10'
+                            : 'border-border/50 bg-background hover:border-amber-500/30 hover:bg-amber-500/5 text-foreground/70',
+                        (disabled || submitted) && 'cursor-default',
+                      )}
+                    >
+                      <span className={cn(
+                        'flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-bold',
+                        isSelected
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-muted/60 text-muted-foreground/60',
+                      )}>
+                        {opt.key}
+                      </span>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       <div className="px-4 py-3 border-t border-amber-500/10 bg-amber-500/[0.02]">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-            placeholder="Type your answer..."
-            disabled={disabled}
-            className="flex-1 rounded-lg border border-amber-500/20 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 placeholder:text-muted-foreground/50 disabled:opacity-50"
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={disabled || !answer.trim()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send className="h-3.5 w-3.5" />
-            Answer
-          </button>
-        </div>
+        {!submitted ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && hasAnySelection && handleSubmit()}
+              placeholder="Anything else to add? (optional)"
+              disabled={disabled}
+              className="w-full rounded-lg border border-amber-500/15 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 placeholder:text-muted-foreground/40 disabled:opacity-50"
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={disabled || !hasAnySelection}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-semibold transition-all',
+                !hasAnySelection || disabled
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                  : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm hover:shadow-md active:scale-[0.98]',
+              )}
+            >
+              <Send className="h-3.5 w-3.5" />
+              Confirm & Continue
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+            <Check className="h-4 w-4" />
+            <span className="font-medium">Preferences confirmed — sprint continuing...</span>
+          </div>
+        )}
       </div>
     </div>
   );

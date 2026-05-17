@@ -27,10 +27,15 @@ export type RoleSegment = {
   status: 'active' | 'done' | 'fail';
 };
 
+export type BAQuestion = {
+  text: string;
+  options: { key: string; label: string }[];
+};
+
 export type TeamProgress = {
   phases: TeamPhaseInfo[];
   activeRole: TeamRole | null;
-  baQuestions: string[] | null;
+  baQuestions: BAQuestion[] | null;
   baRejection: string | null;
   sprintComplete: boolean;
   roleSegments: RoleSegment[];
@@ -118,10 +123,21 @@ function parseTeamMarker(text: string): TeamPhaseInfo | null {
   return { role: match[1] as TeamRole, status: match[2] as TeamPhaseInfo['status'], name: match[3], title: match[4] };
 }
 
-function extractBAQuestions(text: string): string[] | null {
+function extractBAQuestions(text: string): BAQuestion[] | null {
   const match = text.match(/\[QUESTIONS\]([\s\S]*?)\[\/QUESTIONS\]/);
   if (!match) return null;
-  return match[1].trim().split('\n').map(q => q.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+  const lines = match[1].trim().split('\n').filter(Boolean);
+  return lines.map(line => {
+    const cleaned = line.replace(/^\d+\.\s*/, '').trim();
+    const optionRegex = /\[([A-Z])\]\s*([^[]*?)(?=\s*\[[A-Z]\]|$)/g;
+    const options: { key: string; label: string }[] = [];
+    let optMatch;
+    while ((optMatch = optionRegex.exec(cleaned)) !== null) {
+      options.push({ key: optMatch[1], label: optMatch[2].trim() });
+    }
+    const questionText = cleaned.replace(/\s*\[[A-Z]\]\s*[^[]*?(?=\s*\[[A-Z]\]|$)/g, '').trim();
+    return { text: questionText, options };
+  }).filter(q => q.text);
 }
 
 function extractBARejection(text: string): string | null {
@@ -338,7 +354,7 @@ export function useChat(): UseChatReturn {
           let teamMatch;
           const currentPhases: TeamPhaseInfo[] = [];
           let latestActiveRole: TeamRole | null = null;
-          let detectedQuestions: string[] | null = null;
+          let detectedQuestions: BAQuestion[] | null = null;
           let detectedRejection: string | null = null;
           let sprintDone = false;
 
