@@ -111,15 +111,17 @@ export class SprintOrchestrator {
 
     // --- QA Phase (with retry loop, max MAX_QA_RETRIES rounds) ---
     let currentCode = devOutput;
-    for (let attempt = 0; attempt <= MAX_QA_RETRIES; attempt++) {
+    let lastQaOutput = '';
+
+    for (let attempt = 0; attempt < MAX_QA_RETRIES; attempt++) {
       yield this.phaseMarker('qa', 'start');
-      let qaOutput = '';
+      lastQaOutput = '';
       for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
-        qaOutput += chunk;
+        lastQaOutput += chunk;
         yield chunk;
       }
 
-      if (qaOutput.includes('[QA:PASS]')) {
+      if (lastQaOutput.includes('[QA:PASS]')) {
         yield this.phaseMarker('qa', 'pass');
         yield `\n[SPRINT:COMPLETE]\n`;
         return;
@@ -127,19 +129,53 @@ export class SprintOrchestrator {
 
       yield this.phaseMarker('qa', 'fail');
 
-      if (attempt < MAX_QA_RETRIES) {
-        yield this.phaseMarker('dev', 'fix');
-        let fixOutput = '';
-        for await (const chunk of this.dev.fix(currentCode, qaOutput, baOutput, uiuxOutput)) {
-          fixOutput += chunk;
-          yield chunk;
-        }
-        currentCode = fixOutput;
-        yield this.phaseMarker('dev', 'done');
+      // Dev fixes based on QA feedback
+      yield this.phaseMarker('dev', 'fix');
+      let fixOutput = '';
+      for await (const chunk of this.dev.fix(currentCode, lastQaOutput, baOutput, uiuxOutput)) {
+        fixOutput += chunk;
+        yield chunk;
       }
+      currentCode = fixOutput;
+      yield this.phaseMarker('dev', 'done');
     }
 
-    yield `\n[SPRINT:COMPLETE]\n`;
+    // --- Escalation: TL reviews after MAX_QA_RETRIES failures ---
+    yield this.phaseMarker('tl', 'fix');
+    let tlReviewOutput = '';
+    for await (const chunk of this.tl.reviewFailures(baOutput, lastQaOutput, currentCode)) {
+      tlReviewOutput += chunk;
+      yield chunk;
+    }
+    yield this.phaseMarker('tl', 'done');
+
+    // Dev rebuilds with TL's revised guidance
+    yield this.phaseMarker('dev', 'fix');
+    let rebuiltCode = '';
+    for await (const chunk of this.dev.fix(currentCode, `TL REVIEW (revised approach):\n${tlReviewOutput}\n\nOriginal QA issues:\n${lastQaOutput}`, baOutput, uiuxOutput)) {
+      rebuiltCode += chunk;
+      yield chunk;
+    }
+    currentCode = rebuiltCode;
+    yield this.phaseMarker('dev', 'done');
+
+    // Final QA after TL escalation
+    yield this.phaseMarker('qa', 'start');
+    let finalQaOutput = '';
+    for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
+      finalQaOutput += chunk;
+      yield chunk;
+    }
+
+    if (finalQaOutput.includes('[QA:PASS]')) {
+      yield this.phaseMarker('qa', 'pass');
+      yield `\n[SPRINT:COMPLETE]\n`;
+      return;
+    }
+
+    // Still failing — be honest with the user
+    yield this.phaseMarker('qa', 'fail');
+    yield `\n[SPRINT:INCOMPLETE]\n${finalQaOutput}\n`;
   }
 
   private hasQuestions(text: string): boolean {

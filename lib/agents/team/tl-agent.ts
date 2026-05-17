@@ -23,4 +23,27 @@ export class TLAgent {
 
     yield* this.llm.streamChat(messages);
   }
+
+  async *reviewFailures(baOutput: string, qaFeedback: string, failedCode: string): AsyncIterable<string> {
+    const messages: LLMMessage[] = [
+      { role: 'system', content: PROMPT_TL },
+      {
+        role: 'user',
+        content: `ESCALATION: The developer has failed QA 3 times. I need you to review the situation and provide a revised technical plan.
+
+## BA Requirements
+${baOutput}
+
+## QA's Latest Feedback (issues that keep failing)
+${qaFeedback}
+
+## Developer's Latest Code (still has issues)
+${failedCode}
+
+Analyze the root cause of the repeated failures. Provide a REVISED technical approach that specifically addresses the QA issues. Focus on what the developer is doing wrong and how to fix it structurally.`,
+      },
+    ];
+
+    yield* this.llm.streamChat(messages);
+  }
 }

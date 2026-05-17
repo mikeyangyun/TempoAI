@@ -219,6 +219,11 @@ function AssistantMessage({
           {resolvedTeamProgress.sprintComplete && (
             <SprintSummaryCard roleSegments={resolvedTeamProgress.roleSegments} />
           )}
+
+          {/* Sprint incomplete — honest feedback */}
+          {resolvedTeamProgress.sprintIncomplete && (
+            <SprintIncompleteCard />
+          )}
         </div>
       )}
 
@@ -370,6 +375,7 @@ function rebuildTeamProgress(sprintRaw: string): TeamProgress {
 
   const roleSegments = parseRoleSegments(sprintRaw);
   const sprintComplete = sprintRaw.includes('[SPRINT:COMPLETE]');
+  const sprintIncomplete = sprintRaw.includes('[SPRINT:INCOMPLETE]');
 
   let baQuestions: BAQuestion[] | null = null;
   const qMatch = sprintRaw.match(/\[QUESTIONS\]([\s\S]*?)\[\/QUESTIONS\]/);
@@ -400,6 +406,7 @@ function rebuildTeamProgress(sprintRaw: string): TeamProgress {
     baQuestions,
     baRejection,
     sprintComplete,
+    sprintIncomplete,
     roleSegments,
   };
 }
@@ -532,6 +539,26 @@ function SprintSummaryCard({ roleSegments }: SprintSummaryCardProps) {
           <p className="text-sm font-semibold text-foreground">MVP Shipped</p>
           <p className="text-[11px] text-muted-foreground">
             {completedRoles} roles completed{qaPass ? ' — QA passed' : ''} — view in preview panel
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Sprint Incomplete Card ---
+
+function SprintIncompleteCard() {
+  return (
+    <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.03] dark:bg-amber-500/[0.05] overflow-hidden">
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 mt-0.5">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-foreground">Sprint needs your help</p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+            The team tried multiple rounds including a TL review, but some QA issues remain. The app has been generated — check the preview to see what works. You can continue the conversation to request specific fixes.
           </p>
         </div>
       </div>

@@ -38,6 +38,7 @@ export type TeamProgress = {
   baQuestions: BAQuestion[] | null;
   baRejection: string | null;
   sprintComplete: boolean;
+  sprintIncomplete: boolean;
   roleSegments: RoleSegment[];
 };
 
@@ -152,6 +153,7 @@ const INITIAL_TEAM_PROGRESS: TeamProgress = {
   baQuestions: null,
   baRejection: null,
   sprintComplete: false,
+  sprintIncomplete: false,
   roleSegments: [],
 };
 
@@ -188,7 +190,7 @@ export function parseRoleSegments(raw: string): RoleSegment[] {
 
     let content = raw.slice(startIdx, endIdx)
       .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
-      .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
+      .replace(/\n?\[SPRINT:(?:COMPLETE|INCOMPLETE)\]\n?/g, '')
       .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
       .replace(/\[BA:REJECT\][\s\S]*?(?:\[\/BA:REJECT\]|$)/g, '')
       .trim();
@@ -356,7 +358,6 @@ export function useChat(): UseChatReturn {
           let latestActiveRole: TeamRole | null = null;
           let detectedQuestions: BAQuestion[] | null = null;
           let detectedRejection: string | null = null;
-          let sprintDone = false;
 
           while ((teamMatch = teamMarkerRegex.exec(fullContent)) !== null) {
             const info: TeamPhaseInfo = {
@@ -380,9 +381,8 @@ export function useChat(): UseChatReturn {
             }
           }
 
-          if (fullContent.includes('[SPRINT:COMPLETE]')) {
-            sprintDone = true;
-          }
+          const sprintDone = fullContent.includes('[SPRINT:COMPLETE]');
+          const sprintFailed = fullContent.includes('[SPRINT:INCOMPLETE]');
 
           const roleSegments = currentPhases.length > 0 ? parseRoleSegments(fullContent) : [];
 
@@ -392,6 +392,7 @@ export function useChat(): UseChatReturn {
             baQuestions: detectedQuestions,
             baRejection: detectedRejection,
             sprintComplete: sprintDone,
+            sprintIncomplete: sprintFailed,
             roleSegments,
           });
 
@@ -409,7 +410,7 @@ export function useChat(): UseChatReturn {
           // Strip all markers from content before parsing
           const cleanContent = fullContent
             .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
-            .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
+            .replace(/\n?\[SPRINT:(?:COMPLETE|INCOMPLETE)\]\n?/g, '')
             .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
             .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '')
             .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
@@ -446,7 +447,7 @@ export function useChat(): UseChatReturn {
 
         const cleanedFinal = fullContent
           .replace(/\n?\[TEAM:[^\]]*\]\n?/g, '')
-          .replace(/\n?\[SPRINT:COMPLETE\]\n?/g, '')
+          .replace(/\n?\[SPRINT:(?:COMPLETE|INCOMPLETE)\]\n?/g, '')
           .replace(/\n?\[PHASE:\w+(?::\d+)?\]\n?/g, '')
           .replace(/\n?\[VALIDATION_FEEDBACK:[^\]]*\]\n?/g, '')
           .replace(/\[QUESTIONS\][\s\S]*?\[\/QUESTIONS\]/g, '')
@@ -518,6 +519,21 @@ export function useChat(): UseChatReturn {
               '',
               ...(features.length > 0 ? ['Features included:', ...features.map(f => `  • ${f}`), ''] : []),
               'You can continue to iterate — request changes, add features, or refine the design.',
+            ].join('\n');
+
+            sprintContextRef.current = {
+              roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
+              sprintNumber: sprintNum,
+            };
+          } else if (fullContent.includes('[SPRINT:INCOMPLETE]')) {
+            const sprintNum = (sprintContextRef.current?.sprintNumber || 0) + 1;
+            summaryContent = [
+              `Sprint ${sprintNum} could not fully pass QA after multiple attempts (including TL escalation).`,
+              '',
+              'The app has been generated but some issues may remain. You can:',
+              '  • Continue the conversation to request specific fixes',
+              '  • Describe what needs to change and we\'ll start a new sprint',
+              '  • Check the preview to see what works and what doesn\'t',
             ].join('\n');
 
             sprintContextRef.current = {
