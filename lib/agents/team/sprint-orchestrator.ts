@@ -132,7 +132,7 @@ export class SprintOrchestrator {
       // Dev fixes based on QA feedback
       yield this.phaseMarker('dev', 'fix');
       let fixOutput = '';
-      for await (const chunk of this.dev.fix(currentCode, lastQaOutput, baOutput, uiuxOutput)) {
+      for await (const chunk of this.dev.fix(currentCode, lastQaOutput, baOutput, uiuxOutput, tlOutput)) {
         fixOutput += chunk;
         yield chunk;
       }
@@ -152,30 +152,46 @@ export class SprintOrchestrator {
     // Dev rebuilds with TL's revised guidance
     yield this.phaseMarker('dev', 'fix');
     let rebuiltCode = '';
-    for await (const chunk of this.dev.fix(currentCode, `TL REVIEW (revised approach):\n${tlReviewOutput}\n\nOriginal QA issues:\n${lastQaOutput}`, baOutput, uiuxOutput)) {
+    for await (const chunk of this.dev.fix(currentCode, `TL REVIEW (revised approach):\n${tlReviewOutput}\n\nOriginal QA issues:\n${lastQaOutput}`, baOutput, uiuxOutput, tlOutput)) {
       rebuiltCode += chunk;
       yield chunk;
     }
     currentCode = rebuiltCode;
     yield this.phaseMarker('dev', 'done');
 
-    // Final QA after TL escalation
-    yield this.phaseMarker('qa', 'start');
-    let finalQaOutput = '';
-    for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
-      finalQaOutput += chunk;
-      yield chunk;
-    }
+    // Post-TL QA-Dev loop: up to 3 rounds (1 initial QA + 2 additional Dev fixes)
+    for (let postTlAttempt = 0; postTlAttempt < MAX_QA_RETRIES; postTlAttempt++) {
+      yield this.phaseMarker('qa', 'start');
+      let postTlQaOutput = '';
+      for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
+        postTlQaOutput += chunk;
+        yield chunk;
+      }
 
-    if (finalQaOutput.includes('[QA:PASS]')) {
-      yield this.phaseMarker('qa', 'pass');
-      yield `\n[SPRINT:COMPLETE]\n`;
-      return;
-    }
+      if (postTlQaOutput.includes('[QA:PASS]')) {
+        yield this.phaseMarker('qa', 'pass');
+        yield `\n[SPRINT:COMPLETE]\n`;
+        return;
+      }
 
-    // Still failing — be honest with the user
-    yield this.phaseMarker('qa', 'fail');
-    yield `\n[SPRINT:INCOMPLETE]\n${finalQaOutput}\n`;
+      yield this.phaseMarker('qa', 'fail');
+
+      // If this is the last attempt, QA's output becomes the final conclusion
+      if (postTlAttempt >= MAX_QA_RETRIES - 1) {
+        yield `\n[SPRINT:INCOMPLETE]\n${postTlQaOutput}\n`;
+        return;
+      }
+
+      // Dev fixes again based on latest QA feedback
+      yield this.phaseMarker('dev', 'fix');
+      let postTlFixOutput = '';
+      for await (const chunk of this.dev.fix(currentCode, postTlQaOutput, baOutput, uiuxOutput, tlOutput)) {
+        postTlFixOutput += chunk;
+        yield chunk;
+      }
+      currentCode = postTlFixOutput;
+      yield this.phaseMarker('dev', 'done');
+    }
   }
 
   private hasQuestions(text: string): boolean {

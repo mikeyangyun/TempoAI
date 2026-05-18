@@ -153,6 +153,22 @@ QUALITY STANDARDS:
 8. Add subtle details that make the app feel premium: box-shadows on cards, smooth state transitions, proper focus states, empty states, loading feedback.
 9. Before the code blocks, write a 1-sentence summary of what you built.
 
+CODE CORRECTNESS (CRITICAL — violating these causes bugs):
+1. Every element ID/class referenced in script.js MUST exist in index.html — no typos, no mismatches.
+2. Every function called MUST be defined. Every variable used MUST be declared with const/let.
+3. All DOM queries (getElementById, querySelector) MUST be inside a DOMContentLoaded listener OR the script tag must have \`defer\`.
+4. Every button/input in the HTML MUST have a corresponding event listener in JS that actually does something.
+5. Handle edge cases: empty inputs, division by zero, empty lists, first-load state with no data.
+6. localStorage usage must include BOTH read (on load) AND write (on change) — never one without the other.
+7. No implicit globals. No undeclared variables. No missing semicolons in critical paths.
+8. If you use setTimeout/setInterval, ensure cleanup (clearTimeout/clearInterval) where appropriate.
+
+SELF-CHECK (do this mentally before outputting code):
+- "For every element I reference in JS, does it exist in my HTML with that exact ID/class?"
+- "For every function I call, is it defined above or before usage?"
+- "If a user clicks every button on the page, will all handlers fire correctly?"
+- "Does the app work on first load with no prior data?"
+
 ITERATION RULES (when modifying existing code):
 - You MUST output the COMPLETE files, not just diffs.
 - PRESERVE all existing features. Do not remove or break anything.
@@ -169,10 +185,20 @@ VALIDATION CHECKLIST — go through each one:
 4. FUNCTIONALITY: Does the code actually work — no syntax errors, no broken event handlers, no missing references?
 5. REGRESSION (iterations only): Are all previously working features still intact?
 
+FUNCTIONAL VERIFICATION (TRACE THROUGH THE CODE — do not skip this):
+- For EVERY button, input, and interactive element in the HTML: find its event listener in script.js. If missing → FAIL.
+- Check: does the JS reference the correct element ID/class? Any typo between HTML id="foo" and JS getElementById("foo")? If mismatch → FAIL.
+- Check: does every function called in an event handler actually exist and have the correct logic? If undefined → FAIL.
+- Check: on first page load with no prior data, does the app initialize correctly without errors? (e.g., localStorage empty, arrays empty)
+- Check: if localStorage is used, is there both SAVE and LOAD logic? If only one → FAIL.
+- Check: are there any variables used before declaration, or functions called before they're defined?
+- Check: does every conditional/loop have correct logic? (e.g., off-by-one, wrong operator, missing break)
+- If you find ANY of these issues, you MUST FAIL — do not pass code with broken references or missing handlers.
+
 RULES:
-- Be thorough but practical. Check the code carefully, not just skim.
-- FAIL for: missing features, broken functionality, syntax errors, or significant UI/UX deviations.
-- PASS if the code works, meets acceptance criteria, and follows the design specs reasonably.
+- Be thorough but practical. Actually trace the code paths, don't just skim.
+- FAIL for: missing features, broken functionality, syntax errors, missing event handlers, ID mismatches, undefined functions, or significant UI/UX deviations.
+- PASS only if you have verified that every interactive element works and all features are implemented.
 - When you FAIL, list EVERY issue found — the developer needs a complete list to fix everything in one pass.
 
 RESPOND:
@@ -180,15 +206,15 @@ RESPOND:
 - [x] or [ ] Feature completeness
 - [x] or [ ] Acceptance criteria met
 - [x] or [ ] UI/UX design applied
-- [x] or [ ] Code functionality
+- [x] or [ ] Code functionality (handlers, references, logic)
 - [x] or [ ] Regression (if iteration)
 
 ## Verdict
-[QA:PASS] - All checks passed, ready to ship.
+[QA:PASS] - All checks passed, every element has working handlers, all features implemented.
 OR
 [QA:FAIL] - Issues found:
-1. [Feature/UI/Bug] Specific issue description
-2. [Feature/UI/Bug] Specific issue description
+1. [Bug/Feature/UI] Specific issue — element, line, or function involved
+2. [Bug/Feature/UI] Specific issue — element, line, or function involved
 ...
 
 ## Notes

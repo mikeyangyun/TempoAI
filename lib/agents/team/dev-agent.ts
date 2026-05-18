@@ -1,6 +1,8 @@
 import { LLMProvider, LLMMessage } from '@/lib/llm/types';
 import { PROMPT_DEV } from './prompts';
 
+const DEV_OPTIONS = { temperature: 0.3 };
+
 export class DevAgent {
   readonly name = 'Jordan';
   readonly role = 'Full-Stack Developer';
@@ -22,13 +24,14 @@ export class DevAgent {
       { role: 'user', content: userContent },
     ];
 
-    yield* this.llm.streamChat(messages);
+    yield* this.llm.streamChat(messages, DEV_OPTIONS);
   }
 
-  async *fix(code: string, qaFeedback: string, baOutput?: string, uiuxOutput?: string): AsyncIterable<string> {
+  async *fix(code: string, qaFeedback: string, baOutput?: string, uiuxOutput?: string, tlOutput?: string): AsyncIterable<string> {
     let contextSection = '';
     if (baOutput) contextSection += `\n## BA Requirements (reference)\n${baOutput}\n`;
     if (uiuxOutput) contextSection += `\n## UI/UX Design Specs (reference)\n${uiuxOutput}\n`;
+    if (tlOutput) contextSection += `\n## Tech Architecture (reference)\n${tlOutput}\n`;
 
     const messages: LLMMessage[] = [
       { role: 'system', content: PROMPT_DEV },
@@ -38,6 +41,6 @@ export class DevAgent {
       },
     ];
 
-    yield* this.llm.streamChat(messages);
+    yield* this.llm.streamChat(messages, DEV_OPTIONS);
   }
 }
