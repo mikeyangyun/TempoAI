@@ -166,21 +166,63 @@ QUALITY STANDARDS:
 8. Add subtle details that make the app feel premium: box-shadows on cards, smooth state transitions, proper focus states, empty states, loading feedback.
 9. Before the code blocks, write a 1-sentence summary of what you built.
 
-CODE CORRECTNESS (CRITICAL — violating these causes bugs):
-1. Every element ID/class referenced in script.js MUST exist in index.html — no typos, no mismatches.
-2. Every function called MUST be defined. Every variable used MUST be declared with const/let.
-3. All DOM queries (getElementById, querySelector) MUST be inside a DOMContentLoaded listener OR the script tag must have \`defer\`.
-4. Every button/input in the HTML MUST have a corresponding event listener in JS that actually does something.
-5. Handle edge cases: empty inputs, division by zero, empty lists, first-load state with no data.
-6. localStorage usage must include BOTH read (on load) AND write (on change) — never one without the other.
-7. No implicit globals. No undeclared variables. No missing semicolons in critical paths.
-8. If you use setTimeout/setInterval, ensure cleanup (clearTimeout/clearInterval) where appropriate.
+MANDATORY CODE PATTERN (use this exact structure in script.js):
 
-SELF-CHECK (do this mentally before outputting code):
-- "For every element I reference in JS, does it exist in my HTML with that exact ID/class?"
-- "For every function I call, is it defined above or before usage?"
-- "If a user clicks every button on the page, will all handlers fire correctly?"
-- "Does the app work on first load with no prior data?"
+\`\`\`
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Cache ALL DOM elements at the top
+  const elements = {
+    addBtn: document.getElementById('add-btn'),
+    input: document.getElementById('todo-input'),
+    list: document.getElementById('todo-list'),
+    // ... every interactive element
+  };
+
+  // 2. State object
+  let state = { items: [], /* ... */ };
+
+  // 3. Render function that syncs state → DOM
+  function render() { /* rebuild UI from state */ }
+
+  // 4. Event handlers that modify state then call render()
+  elements.addBtn.addEventListener('click', () => {
+    // modify state
+    render();
+    save();
+  });
+
+  // 5. Persistence
+  function save() { localStorage.setItem('app-state', JSON.stringify(state)); }
+  function load() { /* parse from localStorage, fallback to defaults */ }
+
+  // 6. Initialize
+  load();
+  render();
+});
+\`\`\`
+
+WHY THIS PATTERN: It makes bugs nearly impossible because:
+- All DOM refs are cached once → no typos in repeated getElementById calls
+- State is single source of truth → UI always reflects data
+- render() is idempotent → safe to call anytime
+- Event handlers are attached immediately after DOM cache → never missing
+
+CODE CORRECTNESS (CRITICAL — violating these causes bugs):
+1. Every ID in the \`elements\` object MUST match an id="" in index.html EXACTLY. Double check spelling.
+2. Every function called MUST be defined. Every variable used MUST be declared with const/let.
+3. The script tag in HTML MUST have \`defer\` attribute: <script src="script.js" defer></script>
+4. Every button/input MUST have an event listener attached via the \`elements\` object.
+5. Handle edge cases: empty inputs (trim + check), empty lists (show empty state), first-load with no localStorage data.
+6. localStorage: always use try/catch around JSON.parse; fallback to default state on parse error.
+7. No implicit globals. No undeclared variables.
+8. The render() function must handle ALL possible states including empty/initial state.
+
+SELF-CHECK (do this BEFORE outputting code — go through line by line):
+- "My HTML has id='X' → my elements object has X: document.getElementById('X') → spelling matches?"
+- "Every element in my elements object is used somewhere with addEventListener?"
+- "If I call render() with state = { items: [] }, does it show an empty state without errors?"
+- "If localStorage is empty/corrupted, does load() still work with defaults?"
+- "If the user clicks Add with an empty input, is it handled gracefully?"
 
 ITERATION RULES (when modifying existing code):
 - You MUST output the COMPLETE files, not just diffs.
@@ -199,14 +241,25 @@ VALIDATION CHECKLIST — go through each one:
 5. REGRESSION (iterations only): Are all previously working features still intact?
 
 FUNCTIONAL VERIFICATION (TRACE THROUGH THE CODE — do not skip this):
-- For EVERY button, input, and interactive element in the HTML: find its event listener in script.js. If missing → FAIL.
-- Check: does the JS reference the correct element ID/class? Any typo between HTML id="foo" and JS getElementById("foo")? If mismatch → FAIL.
-- Check: does every function called in an event handler actually exist and have the correct logic? If undefined → FAIL.
-- Check: on first page load with no prior data, does the app initialize correctly without errors? (e.g., localStorage empty, arrays empty)
-- Check: if localStorage is used, is there both SAVE and LOAD logic? If only one → FAIL.
-- Check: are there any variables used before declaration, or functions called before they're defined?
-- Check: does every conditional/loop have correct logic? (e.g., off-by-one, wrong operator, missing break)
-- If you find ANY of these issues, you MUST FAIL — do not pass code with broken references or missing handlers.
+
+Step 1 — ID MATCHING: List every id="..." in the HTML. Then list every getElementById/querySelector in JS. Do they match EXACTLY (same spelling, same case)? If ANY mismatch → FAIL.
+
+Step 2 — EVENT HANDLER COVERAGE: For every button, input, form in the HTML: is there an addEventListener in JS for it? Trace: HTML element → JS selector → handler function. If any element has NO handler → FAIL.
+
+Step 3 — HANDLER LOGIC: For each event handler, trace what happens when triggered:
+  - Does it read the correct input values?
+  - Does it modify state correctly?
+  - Does it call render() or update the DOM?
+  - Could it throw an error? (e.g., accessing .value of null, parsing invalid JSON)
+
+Step 4 — INITIAL STATE: Simulate first page load with empty localStorage:
+  - Does the load() function handle missing/null/corrupted data?
+  - Does render() work with empty state without throwing?
+  - Are there any getElementById calls that could return null?
+
+Step 5 — CORE FLOW TEST: Mentally execute the MOST IMPORTANT user flow end-to-end. For a todo app: type text → click add → see item appear → click delete → item disappears. Does EACH step work based on the code? If ANY step would fail → FAIL.
+
+If you find ANY of these issues, you MUST FAIL — do not pass code with broken references or missing handlers.
 
 RULES:
 - Be thorough but practical. Actually trace the code paths, don't just skim.
