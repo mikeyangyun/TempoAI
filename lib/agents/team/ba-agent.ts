@@ -16,12 +16,12 @@ export class BAAgent {
     if (isIteration && previousContext) {
       messages.push({
         role: 'user',
-        content: `This is an ITERATION on an existing app. Previous sprint delivered these features:\n${previousContext}\n\nThe user now wants: ${userRequest}\n\nIMPORTANT: Specify ONLY the changes/additions. Existing features must be preserved.`,
+        content: `This is an ITERATION on an existing app. Previous sprint delivered these features:\n${previousContext}\n\nThe user now wants: "${userRequest}"\n\nIMPORTANT: First assess if the request is clear enough. If the user only said something vague like "add something" or "I want to change" without specifying WHAT — use Category C with [BA:REJECT] markers. Only proceed if you clearly understand what specific change they want.`,
       });
     } else if (previousContext) {
       messages.push({
         role: 'user',
-        content: `Previous sprint context:\n${previousContext}\n\nNew request: ${userRequest}`,
+        content: `Previous sprint context:\n${previousContext}\n\nNew request: "${userRequest}"\n\nAssess intent clarity first.`,
       });
     } else {
       messages.push({ role: 'user', content: userRequest });
