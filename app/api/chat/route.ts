@@ -3,6 +3,8 @@ import { Orchestrator } from '@/lib/agents/orchestrator';
 import { SprintOrchestrator } from '@/lib/agents/team/sprint-orchestrator';
 import { ChatMessage, AgentContext, ChatMode, SprintContext } from '@/types';
 
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

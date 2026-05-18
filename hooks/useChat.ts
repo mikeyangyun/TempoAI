@@ -546,6 +546,20 @@ export function useChat(): UseChatReturn {
               roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
               sprintNumber: sprintContextRef.current?.sprintNumber || 1,
             };
+          } else if (fullContent.includes('[TEAM:ba:reject')) {
+            summaryContent = '';
+          } else if (segments.length > 0) {
+            summaryContent = [
+              'Sprint was interrupted before completion.',
+              '',
+              'The generation may have been cut short due to a timeout or connection issue.',
+              'You can try again — just re-send your request or describe what you need.',
+            ].join('\n');
+
+            sprintContextRef.current = {
+              roleOutputs: segments.map(s => ({ role: s.role, content: s.content })),
+              sprintNumber: sprintContextRef.current?.sprintNumber || 1,
+            };
           }
         }
 

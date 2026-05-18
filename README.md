@@ -188,6 +188,8 @@ LLM provider priority: DeepSeek → Anthropic → OpenRouter (first available ke
 - **Version History** — every generation creates a snapshot; browse and restore past versions
 - **Project Persistence** — projects, conversations, and code survive refresh (localStorage + IndexedDB)
 - **Multi-File Code Generation** — outputs `index.html`, `style.css`, `script.js` with file tree browser
+- **Resilient Streaming** — 120s per-LLM-call timeout, 300s API route max duration, try-catch in orchestrator ensures sprint always emits a terminal marker
+- **Graceful Interruption Handling** — if a sprint is cut short (timeout/network), the frontend detects the missing marker and displays an "interrupted" message instead of leaving the user confused
 - **Dark/Light Theme** — system-aware with manual toggle
 - **Responsive Layout** — desktop split-pane with draggable divider; mobile tab-based layout
 - **Keyboard Shortcuts** — `⌘K` (new chat), `Esc` (stop), `/` (focus input)
@@ -300,6 +302,7 @@ Key design decisions:
 - **Two-phase QA retry** — Phase 1: up to 3 QA-Dev rounds. Phase 2 (post-TL): up to 3 more QA-Dev rounds. Total maximum: 6 QA validations + 1 TL escalation
 - **TL escalation** — if QA still fails after Phase 1's 3 rounds, TL analyzes the root cause and provides a revised technical approach before Phase 2 begins
 - **Honest failure reporting** — if QA fails even after all Phase 2 attempts, the sprint emits `[SPRINT:INCOMPLETE]` with QA's detailed final conclusion, and the frontend displays an honest card encouraging the user to continue the conversation
+- **Error resilience** — the entire pipeline is wrapped in try-catch; any LLM timeout or network failure results in a proper `[SPRINT:INCOMPLETE]` marker rather than a silent hang. Individual LLM calls have a 120s timeout; the API route has a 300s max duration
 - **Temperature tuning** — Dev and QA use low temperature (0.3) for deterministic, correct code; creative agents (BA, TL, UI/UX) use 0.7
 
 ### Streaming Content Parser (`hooks/useChat.ts`)

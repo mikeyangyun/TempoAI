@@ -34,15 +34,31 @@ export class DeepSeekProvider implements LLMProvider {
       ...(options?.maxTokens && { max_tokens: options.maxTokens }),
     });
 
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body,
-      signal,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
+
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, controller.signal])
+      : controller.signal;
+
+    let response: Response;
+    try {
+      response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body,
+        signal: combinedSignal,
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('LLM request timed out (120s). The prompt may be too long.');
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '');
@@ -61,6 +77,8 @@ export class DeepSeekProvider implements LLMProvider {
         `LLM request failed (${status}): ${errorBody.slice(0, 200)}`
       );
     }
+
+    clearTimeout(timeout);
 
     const reader = response.body?.getReader();
     if (!reader) {

@@ -55,13 +55,16 @@ The central innovation is treating code generation not as a single LLM call, but
 - QA validates against BA criteria + UI/UX specs with structured functional verification checklist
 - Two-phase QA-Dev retry: Phase 1 up to 3 rounds, Phase 2 (post-TL) up to 3 more rounds
 - TL escalation after Phase 1 exhaustion: TL analyzes root cause, provides revised technical approach
-- Dev rebuilds with TL guidance, then QA-Dev loop continues with up to 2 more fix attempts
+- Dev rebuilds with TL guidance, then enters Phase 2 QA-Dev loop (up to 3 rounds total)
 - Honest failure reporting: if QA still fails after all attempts, QA's detailed conclusion shown to user
 - Temperature tuning: Dev and QA use 0.3 (deterministic); BA/TL/UI/UX use 0.7 (creative)
 - Dev prompt includes CODE CORRECTNESS rules and SELF-CHECK to prevent common JS bugs
 - QA prompt includes FUNCTIONAL VERIFICATION: traces element→handler mappings, ID consistency, init state
 - Iteration context: existing code passed to Dev and QA for preservation and regression testing
 - Dev fix() receives full TL architecture context to prevent architectural drift during repair
+- Error resilience: orchestrator try-catch ensures `[SPRINT:INCOMPLETE]` emitted on any LLM timeout/network failure
+- Per-LLM-call timeout (120s) prevents silent hangs; API route maxDuration (300s) for Vercel compatibility
+- Frontend detects missing terminal marker and displays "Sprint was interrupted" fallback message
 
 **Plan Mode**
 - PlannerAgent generates structured plans (Overview, Architecture, Features, Steps, Design, Complexity)

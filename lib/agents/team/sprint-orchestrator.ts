@@ -82,115 +82,120 @@ export class SprintOrchestrator {
 
     yield this.phaseMarker('ba', 'done');
 
-    // --- TL Phase ---
-    yield this.phaseMarker('tl', 'start');
-    let tlOutput = '';
-    for await (const chunk of this.tl.execute(baOutput, isIteration)) {
-      tlOutput += chunk;
-      yield chunk;
-    }
-    yield this.phaseMarker('tl', 'done');
-
-    // --- UI/UX Phase ---
-    yield this.phaseMarker('uiux', 'start');
-    let uiuxOutput = '';
-    for await (const chunk of this.uiux.execute(baOutput, tlOutput)) {
-      uiuxOutput += chunk;
-      yield chunk;
-    }
-    yield this.phaseMarker('uiux', 'done');
-
-    // --- Dev Phase ---
-    yield this.phaseMarker('dev', 'start');
-    let devOutput = '';
-    for await (const chunk of this.dev.execute(baOutput, tlOutput, uiuxOutput, existingCode)) {
-      devOutput += chunk;
-      yield chunk;
-    }
-    yield this.phaseMarker('dev', 'done');
-
-    // --- QA Phase (with retry loop, max MAX_QA_RETRIES rounds) ---
-    let currentCode = devOutput;
-    let lastQaOutput = '';
-
-    for (let attempt = 0; attempt < MAX_QA_RETRIES; attempt++) {
-      yield this.phaseMarker('qa', 'start');
-      lastQaOutput = '';
-      for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
-        lastQaOutput += chunk;
+    try {
+      // --- TL Phase ---
+      yield this.phaseMarker('tl', 'start');
+      let tlOutput = '';
+      for await (const chunk of this.tl.execute(baOutput, isIteration)) {
+        tlOutput += chunk;
         yield chunk;
       }
+      yield this.phaseMarker('tl', 'done');
 
-      if (lastQaOutput.includes('[QA:PASS]')) {
-        yield this.phaseMarker('qa', 'pass');
-        yield `\n[SPRINT:COMPLETE]\n`;
-        return;
-      }
-
-      yield this.phaseMarker('qa', 'fail');
-
-      // Dev fixes based on QA feedback
-      yield this.phaseMarker('dev', 'fix');
-      let fixOutput = '';
-      for await (const chunk of this.dev.fix(currentCode, lastQaOutput, baOutput, uiuxOutput, tlOutput)) {
-        fixOutput += chunk;
+      // --- UI/UX Phase ---
+      yield this.phaseMarker('uiux', 'start');
+      let uiuxOutput = '';
+      for await (const chunk of this.uiux.execute(baOutput, tlOutput)) {
+        uiuxOutput += chunk;
         yield chunk;
       }
-      currentCode = fixOutput;
+      yield this.phaseMarker('uiux', 'done');
+
+      // --- Dev Phase ---
+      yield this.phaseMarker('dev', 'start');
+      let devOutput = '';
+      for await (const chunk of this.dev.execute(baOutput, tlOutput, uiuxOutput, existingCode)) {
+        devOutput += chunk;
+        yield chunk;
+      }
       yield this.phaseMarker('dev', 'done');
-    }
 
-    // --- Escalation: TL reviews after MAX_QA_RETRIES failures ---
-    yield this.phaseMarker('tl', 'fix');
-    let tlReviewOutput = '';
-    for await (const chunk of this.tl.reviewFailures(baOutput, lastQaOutput, currentCode)) {
-      tlReviewOutput += chunk;
-      yield chunk;
-    }
-    yield this.phaseMarker('tl', 'done');
+      // --- QA Phase (with retry loop, max MAX_QA_RETRIES rounds) ---
+      let currentCode = devOutput;
+      let lastQaOutput = '';
 
-    // Dev rebuilds with TL's revised guidance
-    yield this.phaseMarker('dev', 'fix');
-    let rebuiltCode = '';
-    for await (const chunk of this.dev.fix(currentCode, `TL REVIEW (revised approach):\n${tlReviewOutput}\n\nOriginal QA issues:\n${lastQaOutput}`, baOutput, uiuxOutput, tlOutput)) {
-      rebuiltCode += chunk;
-      yield chunk;
-    }
-    currentCode = rebuiltCode;
-    yield this.phaseMarker('dev', 'done');
+      for (let attempt = 0; attempt < MAX_QA_RETRIES; attempt++) {
+        yield this.phaseMarker('qa', 'start');
+        lastQaOutput = '';
+        for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
+          lastQaOutput += chunk;
+          yield chunk;
+        }
 
-    // Post-TL QA-Dev loop: up to 3 rounds (1 initial QA + 2 additional Dev fixes)
-    for (let postTlAttempt = 0; postTlAttempt < MAX_QA_RETRIES; postTlAttempt++) {
-      yield this.phaseMarker('qa', 'start');
-      let postTlQaOutput = '';
-      for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
-        postTlQaOutput += chunk;
+        if (lastQaOutput.includes('[QA:PASS]')) {
+          yield this.phaseMarker('qa', 'pass');
+          yield `\n[SPRINT:COMPLETE]\n`;
+          return;
+        }
+
+        yield this.phaseMarker('qa', 'fail');
+
+        // Dev fixes based on QA feedback
+        yield this.phaseMarker('dev', 'fix');
+        let fixOutput = '';
+        for await (const chunk of this.dev.fix(currentCode, lastQaOutput, baOutput, uiuxOutput, tlOutput)) {
+          fixOutput += chunk;
+          yield chunk;
+        }
+        currentCode = fixOutput;
+        yield this.phaseMarker('dev', 'done');
+      }
+
+      // --- Escalation: TL reviews after MAX_QA_RETRIES failures ---
+      yield this.phaseMarker('tl', 'fix');
+      let tlReviewOutput = '';
+      for await (const chunk of this.tl.reviewFailures(baOutput, lastQaOutput, currentCode)) {
+        tlReviewOutput += chunk;
         yield chunk;
       }
+      yield this.phaseMarker('tl', 'done');
 
-      if (postTlQaOutput.includes('[QA:PASS]')) {
-        yield this.phaseMarker('qa', 'pass');
-        yield `\n[SPRINT:COMPLETE]\n`;
-        return;
-      }
-
-      yield this.phaseMarker('qa', 'fail');
-
-      // If this is the last attempt, QA's output becomes the final conclusion
-      if (postTlAttempt >= MAX_QA_RETRIES - 1) {
-        yield `\n[SPRINT:INCOMPLETE]\n${postTlQaOutput}\n`;
-        return;
-      }
-
-      // Dev fixes again based on latest QA feedback
+      // Dev rebuilds with TL's revised guidance
       yield this.phaseMarker('dev', 'fix');
-      let postTlFixOutput = '';
-      for await (const chunk of this.dev.fix(currentCode, postTlQaOutput, baOutput, uiuxOutput, tlOutput)) {
-        postTlFixOutput += chunk;
+      let rebuiltCode = '';
+      for await (const chunk of this.dev.fix(currentCode, `TL REVIEW (revised approach):\n${tlReviewOutput}\n\nOriginal QA issues:\n${lastQaOutput}`, baOutput, uiuxOutput, tlOutput)) {
+        rebuiltCode += chunk;
         yield chunk;
       }
-      currentCode = postTlFixOutput;
+      currentCode = rebuiltCode;
       yield this.phaseMarker('dev', 'done');
+
+      // Post-TL QA-Dev loop: up to 3 rounds (1 initial QA + 2 additional Dev fixes)
+      for (let postTlAttempt = 0; postTlAttempt < MAX_QA_RETRIES; postTlAttempt++) {
+        yield this.phaseMarker('qa', 'start');
+        let postTlQaOutput = '';
+        for await (const chunk of this.qa.execute(baOutput, uiuxOutput, currentCode, existingCode)) {
+          postTlQaOutput += chunk;
+          yield chunk;
+        }
+
+        if (postTlQaOutput.includes('[QA:PASS]')) {
+          yield this.phaseMarker('qa', 'pass');
+          yield `\n[SPRINT:COMPLETE]\n`;
+          return;
+        }
+
+        yield this.phaseMarker('qa', 'fail');
+
+        // If this is the last attempt, QA's output becomes the final conclusion
+        if (postTlAttempt >= MAX_QA_RETRIES - 1) {
+          yield `\n[SPRINT:INCOMPLETE]\n${postTlQaOutput}\n`;
+          return;
+        }
+
+        // Dev fixes again based on latest QA feedback
+        yield this.phaseMarker('dev', 'fix');
+        let postTlFixOutput = '';
+        for await (const chunk of this.dev.fix(currentCode, postTlQaOutput, baOutput, uiuxOutput, tlOutput)) {
+          postTlFixOutput += chunk;
+          yield chunk;
+        }
+        currentCode = postTlFixOutput;
+        yield this.phaseMarker('dev', 'done');
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      yield `\n[SPRINT:INCOMPLETE]\nSprint interrupted: ${msg}\n`;
     }
   }
 
