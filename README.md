@@ -14,7 +14,7 @@ Most AI code generators treat the LLM as a single black box: user sends prompt, 
 
 Core design principles:
 1. **Separation of concerns** — each agent (BA, TL, UI/UX, Dev, QA) owns one responsibility
-2. **Quality through iteration** — QA validates against requirements and design specs; Dev fixes issues in up to 3 retry rounds, with TL escalation if issues persist
+2. **Quality through iteration** — QA validates against requirements and design specs; two-phase retry (3 rounds + TL escalation + 3 more rounds) ensures persistent issues are caught and fixed
 3. **Transparency** — the entire team's thinking process is visible in the chat as collapsible role cards
 4. **Progressive engagement** — the UI is fully explorable before sign-in; authentication only triggers on action
 
@@ -93,41 +93,40 @@ This prevents the team from wasting effort on unclear requirements.
 Dev writes code
       │
       ▼
-QA validates against:
-  ✓ BA acceptance criteria
-  ✓ UI/UX design specs
-  ✓ Code functionality
-  ✓ Regression (iterations)
-      │
-      ├─── PASS → Ship MVP
-      │
-      └─── FAIL (itemized issues)
-              │
-              ▼
-         Dev fixes ALL issues
-         (with full BA + UI/UX context)
-              │
-              └──→ QA re-validates (up to 3 rounds)
-                        │
-                        └─── Still failing after 3 rounds?
-                                    │
-                                    ▼
-                             TL (Sarah) escalation
-                             Analyzes root cause, revises approach
-                                    │
-                                    ▼
-                             Dev rebuilds with TL guidance
-                                    │
-                                    ▼
-                             Final QA validation
-                                    │
-                              ┌─────┴─────┐
-                              │           │
-                           PASS        FAIL
-                              │           │
-                         MVP Shipped   User notified
-                                      (honest feedback,
-                                       continue conversation)
+╔══════════════════════════════════════════════════════╗
+║  Phase 1: QA-Dev Loop (up to 3 rounds)              ║
+║                                                      ║
+║  QA validates → PASS? → Ship MVP                    ║
+║       │                                              ║
+║       └─ FAIL → Dev fixes (with BA+UI/UX+TL ctx)   ║
+║                      │                               ║
+║                      └─→ repeat (max 3 rounds)      ║
+╚══════════════════════════════════════════════════════╝
+      │ still failing after 3 rounds
+      ▼
+┌──────────────────────────────────┐
+│  TL (Sarah) Escalation           │
+│  Analyzes root cause,            │
+│  revises technical approach      │
+└──────────────┬───────────────────┘
+               │
+               ▼
+      Dev rebuilds with TL guidance
+               │
+               ▼
+╔══════════════════════════════════════════════════════╗
+║  Phase 2: Post-TL QA-Dev Loop (up to 3 rounds)     ║
+║                                                      ║
+║  QA validates → PASS? → Ship MVP                    ║
+║       │                                              ║
+║       └─ FAIL → Dev fixes again                     ║
+║                      │                               ║
+║                      └─→ repeat (max 3 rounds)      ║
+╚══════════════════════════════════════════════════════╝
+      │ still failing after all attempts
+      ▼
+  QA provides detailed final conclusion
+  User notified honestly (can continue conversation)
 ```
 
 ---
@@ -297,10 +296,11 @@ The central coordination engine. It chains agents sequentially via async generat
 Key design decisions:
 - **Async generator pattern** — each agent `yield*`s chunks, enabling true token-level streaming through the entire pipeline
 - **BA gating** — the orchestrator checks BA output for `[BA:REJECT]` or `[QUESTIONS]` markers and halts the sprint early, avoiding wasted LLM calls
-- **Context threading** — BA output feeds into TL and UI/UX; all three feed into Dev; BA + UI/UX + Dev code feed into QA
-- **QA retry loop** — on failure, QA's itemized feedback plus original BA/UI/UX specs are sent back to Dev for targeted fixes (up to 3 rounds)
-- **TL escalation** — if QA still fails after 3 rounds, TL reviews the persistent issues and provides a revised technical approach; Dev rebuilds once more; final QA decides pass/fail
-- **Honest failure reporting** — if QA fails even after TL escalation, the sprint emits `[SPRINT:INCOMPLETE]` and the frontend displays an honest card encouraging the user to continue the conversation
+- **Context threading** — BA output feeds into TL and UI/UX; all three feed into Dev; BA + UI/UX + TL context feed into QA and Dev fixes
+- **Two-phase QA retry** — Phase 1: up to 3 QA-Dev rounds. Phase 2 (post-TL): up to 3 more QA-Dev rounds. Total maximum: 6 QA validations + 1 TL escalation
+- **TL escalation** — if QA still fails after Phase 1's 3 rounds, TL analyzes the root cause and provides a revised technical approach before Phase 2 begins
+- **Honest failure reporting** — if QA fails even after all Phase 2 attempts, the sprint emits `[SPRINT:INCOMPLETE]` with QA's detailed final conclusion, and the frontend displays an honest card encouraging the user to continue the conversation
+- **Temperature tuning** — Dev and QA use low temperature (0.3) for deterministic, correct code; creative agents (BA, TL, UI/UX) use 0.7
 
 ### Streaming Content Parser (`hooks/useChat.ts`)
 

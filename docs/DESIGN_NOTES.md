@@ -21,7 +21,7 @@ The central innovation is treating code generation not as a single LLM call, but
 | **Multi-agent sprint pipeline** | 5 sequential agents (BA → TL → UI/UX → Dev → QA) with phase markers | 5x more LLM calls per generation; higher latency | Quality improvement is significant. Each agent receives only the context it needs. The QA feedback loop catches issues that a single-pass model misses. |
 | **Async generator streaming** | Each agent `yield*`s chunks through the orchestrator to SSE | More complex control flow than request-response | Enables true token-level streaming for all 5 agents in sequence. Users see thinking in real time. Phase markers are injected between chunks for UI updates. |
 | **BA intelligence gating** | BA classifies requests as Clear / Vague / Too Vague before proceeding | Adds a decision point that could incorrectly block valid requests | Prevents the team from wasting 4 downstream LLM calls on requests like "hello" or "做个东西". The iteration-mode override ensures short requests during refinement still pass. |
-| **QA retry loop (max 3 rounds) + TL escalation** | QA validates; on fail, Dev fixes with context. After 3 failures, TL reviews and provides revised approach; Dev rebuilds once more. If still failing, user is notified honestly. | Can use up to 5x QA + 4x Dev + 1 TL escalation calls in worst case | Dramatically improves output quality. The TL escalation catches systemic issues (wrong architecture, misunderstood requirements) that iterative Dev fixes miss. Honest failure reporting builds user trust. |
+| **Two-phase QA-Dev loop + TL escalation** | Phase 1: QA validates, Dev fixes (up to 3 rounds). If still failing, TL reviews root cause. Phase 2: Dev rebuilds with TL guidance, then up to 3 more QA-Dev rounds. If all fail, user notified with QA's detailed conclusion. | Up to 6x QA + 5x Dev + 1 TL escalation calls in worst case | Dramatically improves output quality. The two-phase approach distinguishes "simple bugs" (Phase 1) from "systemic issues" (Phase 2 after TL). TL escalation catches architectural problems that iterative fixes miss. Honest final reporting builds user trust. |
 | **Multi-file output** | Dev produces `index.html` + `style.css` + `script.js` via markdown fences | More complex parsing than single-file; must merge for iframe preview | Closer to real project structure. The file tree in the preview panel gives users a realistic view. `mergeFilesToHtml()` handles reassembly transparently. |
 | **Plan mode with selectable items** | PlannerAgent outputs structured sections; frontend parses into checkboxes | Requires consistent LLM output format to parse correctly | Users can selectively build parts of the plan instead of all-or-nothing. Default "select all" behavior if no explicit choices. |
 | **Progressive Clerk authentication** | Full UI visible without login; `openSignIn()` modal on action | Slightly more complex auth flow than page-level redirect | V0.dev-style experience: users can explore, type prompts, and feel the product before committing to sign up. Pending prompts survive login via `sessionStorage`. |
@@ -52,12 +52,16 @@ The central innovation is treating code generation not as a single LLM call, but
 - BA rejects nonsensical requests with helpful suggestions via RejectionCard
 - TL, UI/UX, Dev execute sequentially with context from upstream agents
 - Dev handles first-build and iteration (preserves existing features)
-- QA validates against BA criteria + UI/UX specs with structured checklist
-- QA-Dev retry loop with up to 3 rounds of fixes
-- TL escalation after 3 QA failures: TL reviews root cause, provides revised technical approach
-- Dev rebuilds once with TL's guidance; final QA pass/fail
-- Honest failure reporting: if QA still fails after TL escalation, user is informed with actionable next steps
+- QA validates against BA criteria + UI/UX specs with structured functional verification checklist
+- Two-phase QA-Dev retry: Phase 1 up to 3 rounds, Phase 2 (post-TL) up to 3 more rounds
+- TL escalation after Phase 1 exhaustion: TL analyzes root cause, provides revised technical approach
+- Dev rebuilds with TL guidance, then QA-Dev loop continues with up to 2 more fix attempts
+- Honest failure reporting: if QA still fails after all attempts, QA's detailed conclusion shown to user
+- Temperature tuning: Dev and QA use 0.3 (deterministic); BA/TL/UI/UX use 0.7 (creative)
+- Dev prompt includes CODE CORRECTNESS rules and SELF-CHECK to prevent common JS bugs
+- QA prompt includes FUNCTIONAL VERIFICATION: traces element→handler mappings, ID consistency, init state
 - Iteration context: existing code passed to Dev and QA for preservation and regression testing
+- Dev fix() receives full TL architecture context to prevent architectural drift during repair
 
 **Plan Mode**
 - PlannerAgent generates structured plans (Overview, Architecture, Features, Steps, Design, Complexity)
@@ -73,7 +77,7 @@ The central innovation is treating code generation not as a single LLM call, but
 - Collapsible role cards showing each agent's thinking process
 - Professional sprint summary as a work report
 - Branded generation splash screen (animated rings, progress bar, status messages)
-- SprintIncompleteCard: amber warning card shown when QA exhausts all retries, guiding user to continue conversation
+- SprintIncompleteCard: amber warning card shown when QA exhausts all retries (both phases), includes QA's final conclusion and guides user to continue conversation
 - Previous preview retained during iterative builds
 - Intelligent auto-scroll: follows output unless user scrolls up
 - Chat input with embedded Plan/Build mode toggle and send button
