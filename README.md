@@ -71,21 +71,22 @@ User Input (natural language)
 
 | Agent | Name | Responsibility |
 |-------|------|----------------|
-| **BA** (Business Analyst) | Mike | Assesses request clarity (clear / vague / too vague), produces spec with features and acceptance criteria, or asks clarifying questions |
+| **BA** (Business Analyst) | Mike | 4-tier intent analysis (A: specific → build, B: direction clear → ask options, C: intent unclear → pause & request clarity, D: not actionable → reject); produces spec with competitive research |
 | **TL** (Tech Lead) | Sarah | Defines architecture, file structure, state management strategy, and build order; escalation reviewer when QA-Dev loop exhausts retries |
 | **UI/UX** (Designer) | Alex | Specifies colors, typography, layout, spacing, and interaction patterns with concrete values |
-| **Dev** (Developer) | Jordan | Implements the full application as multi-file output (HTML + CSS + JS), handles iterations preserving existing features |
-| **QA** (Engineer) | Chris | Validates against BA's acceptance criteria AND UI/UX design specs; fails with itemized issues for Dev to fix |
+| **Dev** (Developer) | Jordan | Implements using a mandatory structured pattern (DOM cache → state → render → handlers → persist); outputs multi-file HTML + CSS + JS |
+| **QA** (Engineer) | Chris | 5-step functional verification: ID matching, handler coverage, handler logic trace, initial state simulation, core flow end-to-end test |
 
 ### BA Intelligence
 
-The BA classifies every incoming request into one of three categories:
+The BA classifies every incoming request into one of four categories:
 
-- **Category A (Clear)** — specific enough to build immediately → outputs spec, sprint proceeds
-- **Category B (Vague but workable)** — has intent but missing details → asks 2-4 clarifying questions, pauses sprint
-- **Category C (Too vague)** — nonsensical or not actionable → rejects with helpful suggestions, sprint stops
+- **Category A (Very specific)** — features + design + behavior specified → outputs spec with competitive research, sprint proceeds
+- **Category B (Direction clear, details missing)** — app type known but needs refinement → asks 2-4 questions with pre-built options [A][B][C], pauses sprint
+- **Category C (Intent unclear)** — cannot determine what app the user wants → pauses sprint, asks user to re-describe more specifically
+- **Category D (Not actionable)** — greetings, random text, not an app request → rejects with example
 
-This prevents the team from wasting effort on unclear requirements.
+The BA's #1 rule: "Never proceed to build if you have doubts about intent." This prevents wasted effort and ensures the team builds what the user actually wants.
 
 ### QA-Dev Feedback Loop with TL Escalation
 

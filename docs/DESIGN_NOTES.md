@@ -47,9 +47,9 @@ The central innovation is treating code generation not as a single LLM call, but
 ### What Works (Complete Feature List)
 
 **Multi-Agent Sprint System**
-- BA assesses request clarity with 3-tier classification (clear / vague / reject)
-- BA asks clarifying questions for vague requests; user answers via interactive QuestionCard
-- BA rejects nonsensical requests with helpful suggestions via RejectionCard
+- BA assesses request clarity with 4-tier classification (A: specific, B: direction clear, C: intent unclear, D: not actionable)
+- BA asks clarifying questions with [A][B][C] options for Category B; user answers via interactive QuestionCard
+- BA pauses sprint for Category C (intent unclear) with request to re-describe; rejects Category D via RejectionCard
 - TL, UI/UX, Dev execute sequentially with context from upstream agents
 - Dev handles first-build and iteration (preserves existing features)
 - QA validates against BA criteria + UI/UX specs with structured functional verification checklist
@@ -58,8 +58,8 @@ The central innovation is treating code generation not as a single LLM call, but
 - Dev rebuilds with TL guidance, then enters Phase 2 QA-Dev loop (up to 3 rounds total)
 - Honest failure reporting: if QA still fails after all attempts, QA's detailed conclusion shown to user
 - Temperature tuning: Dev and QA use 0.3 (deterministic); BA/TL/UI/UX use 0.7 (creative)
-- Dev prompt includes CODE CORRECTNESS rules and SELF-CHECK to prevent common JS bugs
-- QA prompt includes FUNCTIONAL VERIFICATION: traces element→handler mappings, ID consistency, init state
+- Dev prompt enforces mandatory structured code pattern (DOM cache → state → render → handlers → persist → init) to structurally prevent common bugs
+- QA prompt includes 5-step FUNCTIONAL VERIFICATION: ID matching, handler coverage, handler logic trace, initial state simulation, core flow end-to-end test
 - Iteration context: existing code passed to Dev and QA for preservation and regression testing
 - Dev fix() receives full TL architecture context to prevent architectural drift during repair
 - Error resilience: orchestrator try-catch ensures `[SPRINT:INCOMPLETE]` emitted on any LLM timeout/network failure
